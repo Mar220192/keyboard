@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content">
+<meta name="theme-color" content="#111317">
+<title>Phone Keyboard</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #111317; --panel: #1b1e24; --key: #262a32; --key-active: #ff8200;
+    --text: #e8e8ea; --muted: #8b8f98; --ok: #3ccf7a; --bad: #ff5a5a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* No text selection / long-press menus anywhere except real text fields */
+  body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overflow-x: hidden; }
+  input, textarea, select { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+  html { overflow-x: hidden; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.3 system-ui, -apple-system, Roboto, sans-serif; overscroll-behavior: none; }
+  body { display: flex; flex-direction: column; height: 100dvh; }
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--panel); }
+  #dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); flex: none; }
+  #dot.on, .rdot.on { background: var(--ok); }
+  .rdot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); flex: none; }
+  #status { flex: 1; min-width: 0; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  button { font: inherit; color: var(--text); background: var(--key); border: 0; border-radius: 8px;
+    padding: 10px 0; min-width: 0; touch-action: manipulation; user-select: none; }
+  button:active, button.held { background: #3a3f4a; }
+  button.mod.on { background: var(--key-active); color: #111; font-weight: 600; }
+  #connect { background: var(--key-active); color: #111; font-weight: 600; padding: 8px 14px; }
+  #pad { flex: 1; margin: 8px 8px 0; border-radius: 12px; background: var(--panel);
+    touch-action: none; position: relative; min-height: 120px; display: flex; align-items: center; justify-content: center; }
+  #pad span { color: #5b616d; font-size: 13px; text-align: center; pointer-events: none; }
+  .row { display: grid; gap: 6px; padding: 6px 8px 0; }
+  .r2 { grid-template-columns: 1fr 1fr; }
+  .r3 { grid-template-columns: 1fr 1fr 1fr; }
+  .r4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  #lock.on { background: var(--key-active); color: #111; font-weight: 600; }
+  .speedrow { display: flex; align-items: center; gap: 8px; padding: 6px 12px 0; color: var(--muted); font-size: 13px; }
+  .speedrow input { flex: 1; accent-color: var(--key-active); }
+  .speedrow output { width: 34px; text-align: right; color: var(--text); }
+  .r6 { grid-template-columns: repeat(6, 1fr); }
+  .r5 { grid-template-columns: repeat(5, 1fr); }
+  #typebar { display: flex; gap: 6px; padding: 8px; }
+  #kbd { flex: 1; font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 8px; border: 1px solid #333843;
+    background: var(--panel); color: var(--text); }
+  #kbd:focus { outline: 2px solid var(--key-active); }
+  #more { display: none; }
+  #more.open { display: block; }
+  textarea { width: 100%; height: 80px; font: inherit; background: var(--panel); color: var(--text);
+    border: 1px solid #333843; border-radius: 8px; padding: 8px; }
+  .settings:not(.human-on) .humanopt { display: none; }
+  .storeinfo { font-size: 12px; color: var(--muted); padding: 4px 2px 0; min-height: 0; }
+  .storeinfo.ready { color: var(--ok); }
+  .settings select { background: var(--key); color: var(--text); border: 0; border-radius: 6px; padding: 3px 6px; font-size: 13px; }
+  .settings { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 8px 10px; color: var(--muted); font-size: 13px; align-items: center; }
+  .settings input[type=range] { width: 110px; accent-color: var(--key-active); }
+  #err { color: var(--bad); padding: 0 12px; font-size: 13px; }
+  /* ---- macros ---- */
+  #macroBtn { padding: 8px 12px; }
+  #recbar { display: none; align-items: center; gap: 10px; padding: 6px 12px; background: #4a1414; font-size: 13px; }
+  #recbar.on { display: flex; }
+  #recbar.play { background: #14304a; }
+  #recbar:not(.play) #recPause { display: none; }
+  .pausebtn.on { background: var(--key-active); }
+  #recbar span { flex: 1; }
+  #recbar button { padding: 6px 14px; }
+  #xpanel { display: none; position: fixed; inset: 0; z-index: 11; background: var(--bg); flex-direction: column; }
+  #xpanel.open { display: flex; }
+  #xlist { flex: 1; overflow-y: auto; padding-bottom: 12px; }
+  #xlist h4 { margin: 14px 12px 4px; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  #xlist .gitem small { color: var(--muted); margin-left: auto; padding-left: 8px; }
+  .xname { padding: 8px 12px 0; border-top: 1px solid #23262d; }
+  .xname label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .xname div { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .xname input { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 10px; border-radius: 8px; border: 1px solid #333843; background: var(--panel); color: var(--text); }
+  #xgo { margin: 8px; padding: 14px; background: var(--key-active); color: #111; font-weight: 600; }
+  #xgo:disabled { opacity: .4; }
+  #mpanel { display: none; position: fixed; inset: 0; z-index: 10; background: var(--bg); overflow-y: auto; padding-bottom: 40px; }
+  #mpanel.open { display: block; }
+  #mpanel header { position: sticky; top: 0; z-index: 1; }
+  .mtop { display: flex; gap: 6px; padding: 8px 8px 0; align-items: center; }
+  .mtop button { padding: 10px 12px; }
+  .mut { color: var(--muted); font-size: 13px; }
+  #mpanel select, #mpanel input:not([type=checkbox]) { font: inherit; font-size: 16px; background: var(--panel); color: var(--text);
+    border: 1px solid #333843; border-radius: 8px; padding: 8px; min-width: 0; }
+  #steps { margin-top: 8px; border-top: 1px solid #23262d; }
+  .step { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid #23262d; }
+  .step.cur { background: #3a2a10; }
+  .step .num { color: var(--muted); width: 22px; font-size: 12px; flex: none; }
+  .step .kind { width: 58px; flex: none; font-size: 13px; color: var(--key-active); }
+  .step .body { flex: 1; display: flex; gap: 6px; align-items: center; min-width: 0; }
+  .step .body input, .step .body select { flex: 1; width: 0; }
+  .step .ctl { display: flex; gap: 4px; flex: none; }
+  .step .ctl button { padding: 6px 9px; }
+  #recBtn.on { background: var(--bad); color: #fff; }
+  /* ---- remote (macro groups) ---- */
+  #remoteBtn { padding: 8px 12px; }
+  #rpanel { display: none; position: fixed; inset: 0; z-index: 9; background: var(--bg); flex-direction: column; }
+  #rpanel.open { display: flex; }
+  #rpanel .mtop select { flex: 1; font: inherit; font-size: 16px; background: var(--panel); color: var(--text);
+    border: 1px solid #333843; border-radius: 8px; padding: 8px; min-width: 0; }
+  #rgrid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: minmax(84px, auto);
+    gap: 10px; padding: 10px; align-content: start; }
+  #rgrid .mbtn { font-size: 17px; font-weight: 600; padding: 12px 8px; border-radius: 12px; background: var(--key);
+    word-break: break-word; }
+  #rgrid .mbtn.playing { background: #2f6fb0; }
+  #rgrid .mbtn:disabled { opacity: .45; }
+  #rgrid .empty { grid-column: 1 / -1; color: var(--muted); font-size: 14px; padding: 16px 4px; text-align: center; }
+  #redit { display: none; overflow-y: auto; flex: 1; padding-bottom: 20px; }
+  #rpanel.editing #redit { display: block; }
+  #rpanel.editing #rgrid { display: none; }
+  .gitem { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #23262d; }
+  .gitem label { flex: 1; display: flex; align-items: center; gap: 10px; font-size: 16px; }
+  .gitem input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--key-active); }
+  .gitem button { padding: 6px 10px; }
+  #rEditBtn.on { background: var(--key-active); color: #111; font-weight: 600; }
+  #playBtn.on { background: #2f6fb0; }
+  /* ---- write with Claude ---- */
+  #claudeBtn, #remoteBtn, #macroBtn { padding: 8px 10px; }
+  #cpanel { display: none; position: fixed; inset: 0; z-index: 12; background: var(--bg); overflow-y: auto; padding-bottom: 40px; }
+  #cpanel.open { display: block; }
+  #cpanel header { position: sticky; top: 0; z-index: 1; }
+  .csec { padding: 10px 8px 0; }
+  .csec h4 { margin: 4px 4px 6px; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .csec .row { padding: 6px 0 0; }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+  .thumbs div { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; background: var(--panel); }
+  .thumbs.small div { width: 48px; height: 48px; }
+  .thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumbs button { position: absolute; top: 2px; right: 2px; padding: 0; width: 22px; height: 22px; border-radius: 11px;
+    background: rgba(0,0,0,.7); font-size: 13px; line-height: 22px; }
+  #cGo { background: var(--key-active); color: #111; font-weight: 600; }
+  #cGo:disabled { opacity: .45; }
+  .cmsg { font-size: 13px; color: var(--muted); padding: 6px 4px 0; min-height: 18px; }
+  .cmsg.bad { color: var(--bad); }
+  .cmsg.good { color: var(--ok); }
+  #cOut { height: 220px; margin-top: 6px; }
+  #cSet { margin: 14px 8px 0; border-top: 1px solid #23262d; padding-top: 8px; }
+  #cSet summary { color: var(--muted); font-size: 14px; padding: 6px 4px; }
+  #cSet label { display: block; color: var(--muted); font-size: 13px; padding: 8px 4px 0; }
+  #cSet input, #cSet select { font: inherit; font-size: 16px; width: 100%; margin-top: 4px; padding: 9px; border-radius: 8px;
+    border: 1px solid #333843; background: var(--panel); color: var(--text); }
+  #cInstr { height: 120px; margin-top: 4px; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <div id="dot"></div>
+  <div id="status">Not connected</div>
+  <button id="claudeBtn">Write</button>
+  <button id="remoteBtn">Remote</button>
+  <button id="macroBtn">Macros</button>
+  <button id="connect">Connect</button>
+</header>
+<div id="recbar"><span id="recText"></span><button id="recPause" class="pausebtn">Pause</button><button id="recStop">Stop</button></div>
+<div id="err"></div>
+
+<div id="mpanel">
+  <header><b style="flex:1">Macros</b><button id="mclose" style="padding:8px 16px">Done</button></header>
+  <div class="mtop">
+    <select id="mlist" style="flex:1"></select>
+    <button id="mnew">New</button><button id="mren">Rename</button><button id="mdel">Delete</button>
+  </div>
+  <div class="mtop">
+    <button id="recBtn" style="flex:1">● Record</button>
+    <button id="playBtn" style="flex:1">▶ Play</button>
+    <span class="mut">×</span><input id="mrep" type="number" min="1" max="999" value="1" inputmode="numeric" style="width:64px">
+  </div>
+  <div class="mut" style="padding: 8px 10px 0">Record adds to the end of the list. Every step can be edited, moved or deleted below. Key steps use DuckyScript names, e.g. <b>CTRL c</b>, <b>ENTER</b>, <b>ALT TAB</b>, <b>DOWN</b>.</div>
+  <div id="steps"></div>
+  <div class="mtop">
+    <select id="addType" style="flex:1">
+      <option value="text">Type text</option>
+      <option value="key">Key / shortcut</option>
+      <option value="click">Mouse click</option>
+      <option value="move">Mouse move</option>
+      <option value="corner">Mouse to top-left corner</option>
+      <option value="press">Mouse button down</option>
+      <option value="release">Mouse button up</option>
+      <option value="scroll">Scroll</option>
+      <option value="media">Media key</option>
+      <option value="delay">Wait</option>
+    </select>
+    <button id="addStep">+ Add step</button>
+  </div>
+  <div class="mtop"><button id="mclear" style="flex:1">Clear all steps</button></div>
+  <div class="mut" style="padding: 18px 10px 0">Move macros to another phone: <b>Export</b> saves them to a file you can send yourself (Drive, email, messages). On the other phone, open this page and tap <b>Import</b>.</div>
+  <div class="mtop">
+    <button id="mexpAll" style="flex:1">Export all</button>
+    <button id="mexpSel" style="flex:1">Export selected</button>
+    <button id="mimp" style="flex:1">Import</button>
+  </div>
+  <input id="mimpFile" type="file" accept=".json,application/json,text/plain" hidden>
+</div>
+
+<div id="xpanel">
+  <header>
+    <b style="flex:1">Export selected</b>
+    <button id="xcancel" style="padding:8px 16px">Cancel</button>
+  </header>
+  <div class="mtop">
+    <button id="xall" style="flex:1">Select all</button>
+    <button id="xnone" style="flex:1">Select none</button>
+  </div>
+  <div id="xlist"></div>
+  <div class="xname">
+    <label for="xfile">File name</label>
+    <div><input id="xfile" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done"><span>.json</span></div>
+  </div>
+  <button id="xgo">Export</button>
+</div>
+
+<div id="rpanel">
+  <header>
+    <div id="rdot" class="rdot"></div>
+    <b style="flex:1">Remote</b>
+    <button id="rclose" style="padding:8px 16px">Done</button>
+  </header>
+  <div class="mtop">
+    <select id="rgroup"></select>
+    <button id="rEditBtn">Edit</button>
+  </div>
+  <div id="rerr" style="color: var(--bad); padding: 6px 12px 0; font-size: 13px;"></div>
+  <div id="rgrid"></div>
+  <div id="redit">
+    <div class="mtop">
+      <button id="gnew" style="flex:1">New group</button>
+      <button id="gren" style="flex:1">Rename</button>
+      <button id="gdel" style="flex:1">Delete</button>
+    </div>
+    <div class="mut" style="padding: 10px 12px 6px">Tick the macros that belong in this group. Use ▲▼ to set the button order. Make and edit the macros themselves in <b>Macros</b>.</div>
+    <div id="gitems"></div>
+  </div>
+</div>
+
+<div id="pad"><span>Touchpad<br>drag = move · tap = click · 2-finger tap = right click<br>2-finger drag = scroll · double-tap &amp; hold = drag</span></div>
+
+<div class="speedrow">
+  <span>Touch speed</span>
+  <input id="speed" type="range" min="0.3" max="5" step="0.1" value="1.6">
+  <output id="speedVal">1.6</output>
+</div>
+<div class="row r3">
+  <button data-mouse="1">Left</button>
+  <button id="lock">Hold click</button>
+  <button data-mouse="2">Right</button>
+</div>
+
+<div class="row r6">
+  <button class="mod" data-mod="1">Ctrl</button>
+  <button class="mod" data-mod="4">Alt</button>
+  <button class="mod" data-mod="8">Win</button>
+  <button class="mod" data-mod="2">Shift</button>
+  <button data-key="41">Esc</button>
+  <button data-key="43">Tab</button>
+</div>
+<div class="row r6">
+  <button data-key="80">←</button>
+  <button data-key="82">↑</button>
+  <button data-key="81">↓</button>
+  <button data-key="79">→</button>
+  <button data-key="76">Del</button>
+  <button id="moreBtn">⋯</button>
+</div>
+
+<div id="cpanel">
+  <header><div class="rdot" id="cdot"></div><b style="flex:1">Write with Claude</b><button id="cclose" style="padding:8px 16px">Done</button></header>
+  <div class="csec">
+    <h4>Task (photos)</h4>
+    <div class="row r2"><button id="cCam">📷 Camera</button><button id="cLib">🖼 Photos</button></div>
+    <input id="cCamIn" type="file" accept="image/*" capture="environment" hidden>
+    <input id="cLibIn" type="file" accept="image/*" multiple hidden>
+    <div id="cTasks" class="thumbs"></div>
+    <div class="row r2"><button id="cGo">Write text</button><button id="cClear">Clear photos</button></div>
+    <div id="cMsg" class="cmsg"></div>
+  </div>
+  <div class="csec">
+    <h4>Text to type</h4>
+    <textarea id="cOut" placeholder="Claude's text appears here (you can edit it). It's stored on the board: press Caps Lock on the PC to type it."></textarea>
+    <div id="cStore" class="storeinfo"></div>
+    <div class="row r2"><button id="cPause" class="pausebtn">Pause</button><button id="cStop">Stop</button></div>
+  </div>
+  <details id="cSet">
+    <summary>Claude settings</summary>
+    <label>API key (stays on this phone)<input id="cKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
+    <label>Instruction<textarea id="cInstr"></textarea></label>
+    <label>Effort<select id="cEffort"><option value="low">Low (fastest)</option><option value="medium">Medium</option><option value="high">High (best texts)</option></select></label>
+    <label>References (sent with every task): <span id="cRefCount">none</span></label>
+    <div class="row r2" style="padding: 6px 4px 0"><button id="cRefAdd">Add references</button><button id="cRefClear">Remove all</button></div>
+    <input id="cRefIn" type="file" accept="image/*" multiple hidden>
+    <div id="cRefs" class="thumbs small" style="padding: 6px 4px 0"></div>
+  </details>
+</div>
+
+<div id="more">
+  <div class="row r6">
+    <button data-key="74">Home</button>
+    <button data-key="77">End</button>
+    <button data-key="75">PgUp</button>
+    <button data-key="78">PgDn</button>
+    <button data-key="70">PrtSc</button>
+    <button data-combo="5,76" style="font-size:12px">Ctrl Alt Del</button>
+  </div>
+  <div class="row r6" id="fkeys"></div>
+  <div class="row r6">
+    <button data-key="57">Caps</button>
+    <button data-consumer="234">Vol −</button>
+    <button data-consumer="233">Vol +</button>
+    <button data-consumer="226">Mute</button>
+    <button data-consumer="205">⏯</button>
+    <button data-consumer="181">⏭</button>
+  </div>
+  <div class="row r6">
+    <button data-combo="1,6">Copy</button>
+    <button data-combo="1,25">Paste</button>
+    <button data-combo="1,29">Undo</button>
+    <button data-combo="1,4">Sel all</button>
+    <button data-combo="4,43">Alt-Tab</button>
+    <button data-combo="8,7">Desk</button>
+  </div>
+  <div style="padding: 8px 8px 0">
+    <textarea id="bulk" placeholder="Paste a block of text here, then tap Send text"></textarea>
+    <div class="row r4" style="padding: 6px 0 0">
+      <button id="sendBulk">Send text</button>
+      <button id="clipBulk">Clipboard</button>
+      <button id="pauseBulk" class="pausebtn">Pause</button>
+      <button id="stopBulk">Stop</button>
+    </div>
+    <div id="storeInfo" class="storeinfo"></div>
+  </div>
+  <div class="settings" id="settings">
+    <label>Scroll <input id="scrollSpeed" type="range" min="0.2" max="3" step="0.1" value="1"></label>
+    <label>Letter delay <input id="typeDelay" type="range" min="0" max="31" step="1" value="2"> <output id="typeDelayVal">2 ms</output></label>
+    <label title="Send text, Clipboard and macros are typed like a person: natural rhythm, pauses, key presses"><input id="human" type="checkbox"> Humanize</label>
+    <label class="humanopt">Speed <input id="wpm" type="range" min="15" max="150" step="5" value="55"> <output id="wpmVal">55 WPM</output></label>
+    <label class="humanopt" title="Now and then hit a neighbouring key and fix it with Backspace"><input id="typos" type="checkbox"> Typos</label>
+    <label class="humanopt" title="Pause to think every few sentences and before new paragraphs">Thinking
+      <select id="think"><option value="0">Off</option><option value="1">Light</option><option value="2">Normal</option><option value="3">Heavy</option></select></label>
+    <label><input id="raw" type="checkbox"> No autocorrect</label>
+    <label title="Press Caps Lock on the PC while nothing is being typed: the phone's clipboard gets typed (Caps Lock again pauses / resumes)"><input id="capsClip" type="checkbox" checked> Caps Lock types clipboard</label>
+  </div>
+</div>
+
+<div id="typebar">
+  <input id="kbd" type="text" placeholder="Tap here to type on the PC" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="enter">
+  <button data-key="42" style="padding: 0 14px">⌫</button>
+  <button data-key="40" style="padding: 0 14px">⏎</button>
+</div>
+
+<script>
+"use strict";
+// ---- Flipper serial GATT (same UUIDs as the board firmware) ----
+const SERVICE = "8fe5b3d5-2e7f-4a98-2a48-7acc60fe0000";
+const RX_CHAR = "19ed82ae-ed21-4c9d-4145-228e62fe0000"; // phone -> Flipper
+// No-PIN Flipper app: the page proves itself with a saved random secret instead of Bluetooth pairing
+const AUTH_CHAR = "19ed82ae-ed21-4c9d-4145-228e65fe0000";   // write 16-byte secret
+const STATUS_CHAR = "19ed82ae-ed21-4c9d-4145-228e66fe0000"; // read: 0 waiting, 1 ok, 2 rejected
+const INFO_CHAR = "19ed82ae-ed21-4c9d-4145-228e69fe0000";     // read: [0] = Flipper app protocol version
+const PROGRESS_CHAR = "19ed82ae-ed21-4c9d-4145-228e68fe0000"; // read/notify: uint32 LE bytes the board is done with
+const CONFIG_CHAR = "19ed82ae-ed21-4c9d-4145-228e67fe0000"; // write: [0..1] ms pause per letter, [2] bit0 stop / bit1 paused, [3] layout (0 US, 1 DE)
+
+// Random secret for this browser, created once and kept in localStorage.
+// The board remembers the first secret it receives (hold Left on the board to reset).
+function getSecret() {
+  let hex = null;
+  try { hex = localStorage.getItem("phonekb.secret"); } catch (e) {}
+  if (!hex || !/^[0-9a-f]{32}$/.test(hex)) {
+    const b = crypto.getRandomValues(new Uint8Array(16));
+    hex = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+    try { localStorage.setItem("phonekb.secret", hex); } catch (e) {}
+  }
+  return new Uint8Array(hex.match(/../g).map((h) => parseInt(h, 16)));
+}
+
+// ---- protocol opcodes (must match phone_kb.c) ----
+const OP = { TAP: 1, MOVE: 2, DOWN: 3, UP: 4, SCROLL: 5, RELEASE: 6, CONSUMER: 7, TEXT: 8, KDOWN: 9, KUP: 10, HTEXT: 11,
+             STORE_BEGIN: 12, STORE_DATA: 13, STORE_END: 14, JOB_BEGIN: 15, JOB_END: 16,
+             RUN_BEGIN: 17, RUN_DATA: 18, RUN_END: 19 };
+const KEY = { ENTER: 0x28, BKSP: 0x2A, TAB: 0x2B, SPACE: 0x2C };
+
+const $ = (id) => document.getElementById(id);
+let device = null, rxChar = null, cfgChar = null, connected = false, wantConnected = false;
+let progressChar = null;    // newer Flipper app: tells us how much it has typed (flow control)
+
+function setStatus(text, ok) {
+  $("status").textContent = text;
+  $("dot").classList.toggle("on", !!ok);
+  const rd = document.getElementById("rdot"); if (rd) rd.classList.toggle("on", !!ok);
+}
+function showErr(text) { $("err").textContent = text || ""; const r = document.getElementById("rerr"); if (r) r.textContent = text || ""; }
+
+// ---------------- connection ----------------
+try { localStorage.removeItem("phonekb.auto"); localStorage.removeItem("phonekb.rememberedWorks"); } catch (e) {}   // old auto-connect settings
+async function connect() {
+  showErr("");
+  if (!navigator.bluetooth) {
+    showErr("Web Bluetooth isn't available. Open this page in Chrome on Android, over https://.");
+    return;
+  }
+  try {
+    if (!device) {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: "PhoneKB ESP32" }],
+        optionalServices: [SERVICE],
+      });
+      device.addEventListener("gattserverdisconnected", onDisconnected);
+    }
+    wantConnected = true;
+    freshConnect = true;     // the user tapped Connect: may link an unlinked Flipper
+    await openGatt();
+  } catch (e) {
+    if (e.name !== "NotFoundError") showErr(String(e.message || e)); // NotFound = user cancelled picker
+    setStatus("Not connected", false);
+  }
+}
+
+let connecting = false;
+let freshConnect = false;    // false for automatic reconnects
+async function openGatt() {
+  if (connecting) return;           // a connect is already running (e.g. auto-reconnect)
+  connecting = true;
+  try {
+    // Android often drops a brand-new link a moment after connecting
+    // ("GATT Server is disconnected", "Connection failed"…). Retry quietly
+    // a few times before bothering the user.
+    for (let attempt = 1; ; attempt++) {
+      try { await openGattOnce(); return; }
+      catch (e) {
+        const pinProblem = /^(Pairing failed|Wrong key)/.test(e.message);
+        if (pinProblem || !wantConnected) throw e;
+        if (attempt >= 4) throw new Error("Couldn't connect after 4 tries. Make sure the board is plugged in (its light is on) and nothing else is connected to it, then tap Connect again. (" + e.message + ")");
+        try { device.gatt.disconnect(); } catch (_) {}
+        setStatus(`Connecting… (retry ${attempt})`, false);
+        await sleep(600 * attempt);
+        if (!wantConnected) throw e;          // user tapped Disconnect meanwhile
+      }
+    }
+  }
+  catch (e) { wantConnected = false; try { device.gatt.disconnect(); } catch (_) {} throw e; }  // start clean next time
+  finally { connecting = false; }
+}
+
+async function openGattOnce() {
+  setStatus("Connecting to " + device.name + "…", false);
+  const server = await device.gatt.connect();
+  await sleep(400);                        // let Android settle the new link before discovery
+  if (!device.gatt.connected) throw new Error("Link dropped right after connecting");
+  const svc = await server.getPrimaryService(SERVICE);
+  rxChar = await svc.getCharacteristic(RX_CHAR);
+  let authChar = null, statusChar = null;
+  try {
+    authChar = await svc.getCharacteristic(AUTH_CHAR);
+    statusChar = await svc.getCharacteristic(STATUS_CHAR);
+  } catch (_) { /* older Flipper app: uses Bluetooth PIN pairing instead */ }
+  if (authChar && statusChar) {
+    // No-PIN Flipper app: send our secret, then wait for the verdict
+    setStatus("Checking key…", false);
+    // Secret + whether the user tapped Connect. An automatic reconnect never
+    // links an unlinked Flipper (after "Hold Left" the old phone stays out).
+    const auth = new Uint8Array(17);
+    auth.set(getSecret());
+    auth[16] = freshConnect ? 1 : 0;
+    await authChar.writeValueWithResponse(auth);
+    let st = 0;
+    for (let i = 0; i < 20 && st === 0; i++) {
+      st = (await statusChar.readValue()).getUint8(0);
+      if (st === 0) await sleep(100);
+    }
+    if (st === 2) throw new Error(freshConnect
+      ? "Wrong key: this board is linked to another phone or browser. To link this one, hold the BOOT button on the board for 3 seconds (three white blinks), then tap Connect again."
+      : "Wrong key: the board was reset or linked to another phone. Tap Connect to link this phone.");
+    freshConnect = false;     // later reconnects of this session are automatic
+    if (st !== 1) throw new Error("The board didn't answer the key check");
+    // Letter delay setting (older Flipper builds don't have it: then typing speed is fixed)
+    try { cfgChar = await svc.getCharacteristic(CONFIG_CHAR); } catch (_) { cfgChar = null; }
+    delayDirty = true; stopPending = false;   // a Stop tapped while offline must not hit the next text
+    await setupProgress(svc);
+    flipperVersion = 0;
+    try { flipperVersion = (await (await svc.getCharacteristic(INFO_CHAR)).readValue()).getUint8(0); } catch (_) {}
+    checkHumanSupport();
+    // Store the box text if it never was (or sending it was cut off). If it was
+    // stored before and the board no longer has it, it was typed (or the board
+    // app restarted): then only editing the text stores it again.
+    const box = $("bulk").value;
+    if (storing || (box && storedText === null && box !== typedText)) { storing = false; scheduleStore(300); }
+  } else {
+    // First write needs an encrypted, bonded link. Android shows its pairing
+    // dialog here: type the 6-digit PIN that appears on the board's screen.
+    setStatus("Pairing… enter the PIN shown on the board", false);
+  }
+  // Android can reject writes with "GATT operation already in progress" while
+  // it is still bonding or discovering services, so keep retrying for ~30 s.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try {
+      await rxChar.writeValueWithResponse(new Uint8Array([OP.RELEASE]));
+      if (progressChar) sentBytes += 1;   // the board counts this byte too
+      connected = true;
+      keepAwake(true);
+      break;
+    } catch (e) {
+      if (!device.gatt.connected) throw new Error("Link dropped while pairing (" + e.message + ")");   // retried by openGatt
+      if (attempt === 7) throw new Error("Pairing failed. Check the PIN, then tap Connect again. (" + e.message + ")");
+      await sleep(/in progress/i.test(e.message) ? 1500 : 4000);
+    }
+  }
+  setStatus("Connected: " + device.name, true);
+  $("connect").textContent = "Disconnect";
+  pump();
+}
+
+function onDisconnected() {
+  connected = false; rxChar = null; cfgChar = null; progressChar = null;
+  capsPaused = false; lastStartCount = null;   // the board ends a Caps Lock pause on disconnect
+  queue = []; backlogMs = 0; textLog = [];   // the board drops its queue on disconnect, so don't resend stale input
+  keepAwake(false);
+  setPaused(false, false);   // the board drops its queue on disconnect
+  leftLocked = false; $("lock").classList.remove("on"); $("lock").textContent = "Hold click"; // Flipper releases buttons on disconnect
+  setStatus("Disconnected", false);
+  $("connect").textContent = "Connect";
+  if (wantConnected) {
+    setStatus("Reconnecting…", false);
+    setTimeout(() => { if (wantConnected && !connected) openGatt().catch((e) => { setStatus("Not connected", false); showErr(e.message); }); }, 1000);
+  }
+}
+
+$("connect").onclick = () => {
+  if (connected) { wantConnected = false; device.gatt.disconnect(); }
+  else if (connecting) { wantConnected = false; try { device.gatt.disconnect(); } catch (_) {} setStatus("Cancelled", false); }
+  else connect();
+};
+
+// ---------------- send queue ----------------
+// Web Bluetooth allows one GATT op at a time, so everything is queued and
+// coalesced; mouse motion is accumulated between writes for smoothness.
+// Each queue entry is one whole packet, and a write only ever contains whole
+// packets: if the board has to drop a write, it never cuts a packet in half.
+let queue = [];             // packets waiting (each an array of bytes)
+let moveX = 0, moveY = 0, scrollAcc = 0;
+let pumping = false, pumpTimer = null;
+const MAX_WRITE = 180;
+const TEXT_CHUNK = 150;     // max bytes of text per packet (fits in one write)
+
+// The board types slowly with a long letter delay, and its buffer is only
+// 2 KB. Estimate how much typing it still has queued (ms) and don't send more
+// while that's high. Paused time doesn't count.
+const BACKLOG_MAX_MS = 400;
+let backlogMs = 0, backlogAt = performance.now();
+function backlog() {
+  const now = performance.now();
+  if (!paused) backlogMs = Math.max(0, backlogMs - (now - backlogAt));
+  backlogAt = now;
+  return backlogMs;
+}
+function packetCost(p) { return p[0] === OP.TEXT ? p[1] * msPerLetter() : 1; }
+
+let releasePending = false, resumePending = false;
+const RELEASE_OPS = [OP.UP, OP.KUP, OP.RELEASE];
+const STORE_OPS = [OP.STORE_BEGIN, OP.STORE_DATA, OP.STORE_END];
+const INPUT_OPS = [OP.TAP, OP.MOVE, OP.DOWN, OP.UP, OP.SCROLL, OP.RELEASE, OP.CONSUMER, OP.TEXT, OP.KDOWN, OP.KUP, OP.HTEXT];
+const BUSY_HINT = "The board is typing a text: the touchpad and keys are off until it's done (Stop ends it).";
+
+function send(...bytes) {
+  // The stored text isn't input: it's saved on the board (held there while paused)
+  if (STORE_OPS.includes(bytes[0])) { if (connected) { queue.push(bytes); pump(); } return; }
+  if (paused || (flipperRunning && INPUT_OPS.includes(bytes[0]))) {
+    // New input is ignored while paused, or while the board types a saved text by
+    // itself (it would only be done afterwards). Letting go of a held button or key
+    // must still work: the board releases everything right away (config flag).
+    if (RELEASE_OPS.includes(bytes[0]) && connected) { releasePending = true; pump(); }
+    else if (!paused && connected) showErr(BUSY_HINT);
+    return;
+  }
+  recordBytes(bytes);
+  if (!connected) return;   // don't pile up input to dump on the PC at reconnect
+  queue.push(bytes); pump();
+}
+
+function flushMotion() {
+  if (flipperRunning || flipperBusyMs() > 50) {   // the board is busy typing: a late pointer jump is worse than none
+    moveX = moveY = scrollAcc = 0;
+    return;
+  }
+  while (moveX !== 0 || moveY !== 0) {
+    const dx = Math.max(-127, Math.min(127, Math.trunc(moveX)));
+    const dy = Math.max(-127, Math.min(127, Math.trunc(moveY)));
+    if (dx === 0 && dy === 0) break;
+    queue.push([OP.MOVE, dx & 0xFF, dy & 0xFF]);
+    rec({ t: "move", x: dx, y: dy });
+    moveX -= dx; moveY -= dy;
+  }
+  const s = Math.trunc(scrollAcc);
+  if (s !== 0) { const c = Math.max(-127, Math.min(127, s)); queue.push([OP.SCROLL, c & 0xFF]); rec({ t: "scroll", n: c }); scrollAcc -= c; }
+}
+
+// ---- flow control ----
+// The newer Flipper app reports (PROGRESS) how many of the bytes we sent it has
+// finished. We keep at most FLOW_MAX bytes "in flight", so its 2 KB buffer can't
+// overflow, and we send more the moment it has room, so it never runs dry.
+// (Older builds: fall back to the time estimate above.)
+const FLOW_MAX = 1024;
+let sentBytes = 0, flipperDone = 0, progBase = 0, progressAt = 0, progressNotify = false;
+let textLog = [];           // text packets in flight: {end: sentBytes after it, letters}
+const progressListening = new WeakSet();
+
+// The board can also be paused from the PC with Caps Lock (PROGRESS byte 4, bit 0)
+let capsPaused = false;   // (declared before readProgress uses it)
+function setCapsPaused(on) {
+  if (on === capsPaused) return;
+  capsPaused = on;
+  updatePauseButtons();
+  if (on) setStatus("Paused on the board: press Caps Lock on the PC or tap Resume to continue", connected);
+  else if (connected && !paused) setStatus("Connected: " + device.name, true);
+}
+// Pause/Resume buttons: "Resume" while the phone paused, or while the board holds a
+// pause (Caps Lock pause, or one it kept when the phone's connection dropped)
+function flipperHolds() { return capsPaused && flipperVersion >= 5; }   // older apps can't be resumed from here
+function updatePauseButtons() {
+  const held = paused || flipperHolds();
+  document.querySelectorAll(".pausebtn").forEach((b) => { b.textContent = held ? "Resume" : "Pause"; b.classList.toggle("on", held); });
+}
+function togglePause() {
+  if (!connected) return;
+  if (flipperHolds() && !paused) { resumePending = true; pump(); return; }   // release the board's pause
+  setPaused(!paused);
+}
+// PROGRESS byte 4: bit 0 paused with Caps Lock, bit 1 Caps Lock on, bits 4-7 count of
+// Caps Lock presses while the board was idle ("start typing the clipboard")
+let capsOn = false, lastStartCount = null;
+let flipperRunning = false, runsAccepted = 0;   // "type now" text: being typed / how many accepted
+function readProgress(dv) {
+  setProgress(dv.getUint32(0, true));
+  const st = dv.byteLength >= 5 ? dv.getUint8(4) : 0;
+  setCapsPaused((st & 1) === 1);
+  capsOn = (st & 2) === 2;
+  setStoredReady((st & 4) === 4);
+  // The board finished the stored text's last packet but didn't keep it (SD card?)
+  if (storing && storeEndAt && flipperDone >= storeEndAt && !(st & 4)) {
+    storing = false; storeFailed = true; storedText = null; showStoreInfo();
+  }
+  const running = (st & 8) === 8;
+  if (dv.byteLength >= 6) runsAccepted = dv.getUint8(5);
+  if (running !== flipperRunning) {
+    flipperRunning = running;
+    if (!running && $("err").textContent === BUSY_HINT) showErr("");
+    // (e.g. after reconnecting while the board was typing a text by itself)
+    if (connected && !bulkRunning && !paused && !capsPaused)
+      setStatus(running ? "The board is typing a text (Stop works)…" : "Connected: " + device.name, true);
+  }
+  const count = st >> 4;
+  if (dv.byteLength < 5) return;
+  if (lastStartCount === null || document.visibilityState !== "visible") {
+    lastStartCount = count;   // first reading, or the page was in the background: don't act on old presses
+    return;
+  }
+  if (count !== lastStartCount) {
+    lastStartCount = count;
+    capsStart();
+  }
+}
+// After coming back to the page, take the current count without acting on presses made meanwhile
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") lastStartCount = null; refreshProgress(); });
+
+// ---------------- Caps Lock starts the clipboard ----------------
+// Caps Lock pressed on the PC while nothing is being typed: type the phone's
+// clipboard, or, if the browser won't give it (or it's empty), the text in the
+// Send text box. Afterwards Caps Lock is put back the way it was before the press.
+async function capsStart() {
+  if (!$("capsClip").checked || !connected || bulkRunning || playing || flipperRunning) return;   // while typing, Caps Lock pauses (on the board)
+  const capsBefore = !capsOn;   // this press flipped it
+  let text = "", clipProblem = "";
+  try {
+    text = await navigator.clipboard.readText();
+    if (!text) clipProblem = "the clipboard is empty";
+  } catch (e) {
+    clipProblem = "this browser didn't allow reading the clipboard without a tap";
+  }
+  if (!text) {
+    text = $("bulk").value;   // fallback: the text pasted in the Send text box
+    if (text && text === typedText) {   // already typed once (stored text is used once)
+      restoreCaps(capsBefore);
+      showErr("Caps Lock: the text in the box was already typed. Edit or paste new text to type it again.");
+      return;
+    }
+    if (!text) {
+      restoreCaps(capsBefore);
+      showErr("Caps Lock: " + clipProblem + ", and the Send text box is empty. Paste the text into the box (or tap Clipboard).");
+      return;
+    }
+    showErr("Caps Lock: " + clipProblem + ", so the text from the Send text box is typed.");
+    if (bulkBlocked(text)) { await typeBulk(text, capsBefore); return; }   // shows why, puts Caps Lock back
+    markBoxTyped();
+  } else {
+    showErr("");
+  }
+  // Typing happens with Caps Lock OFF (with it on, some PCs shift every key: , -> ;
+  // ß -> ?). The board switches it off itself before the first letter and checks
+  // that the PC really did (the user's key may still be held down at this moment).
+  await typeBulk(text, capsBefore);   // the board restores Caps Lock to capsBefore at the end
+  if (!jobsSupported()) restoreCaps(capsBefore);   // (older Flipper app: the page does it)
+}
+(function () {   // remember the "Caps Lock types clipboard" switch on this phone
+  const el = $("capsClip");
+  try { const v = localStorage.getItem("phonekb.capsClip"); if (v !== null) el.checked = v === "1"; } catch (e) {}
+  el.addEventListener("change", () => { try { localStorage.setItem("phonekb.capsClip", el.checked ? "1" : "0"); } catch (e) {} });
+})();
+function restoreCaps(capsBefore) {
+  if (connected && capsOn !== capsBefore) send(OP.TAP, 0, 0x39);   // the board knows this press is its own
+}
+function setProgress(raw) {
+  flipperDone = Math.min(sentBytes, (raw - progBase) >>> 0);
+  progressAt = performance.now();
+  while (textLog.length && textLog[0].end <= flipperDone) textLog.shift();
+  if (queue.length && !pumping) pump();
+}
+function inFlight() { return progressChar ? Math.max(0, sentBytes - flipperDone) : 0; }
+function lettersInFlight() { let n = 0; for (const t of textLog) if (t.end > flipperDone) n += t.letters; return n; }
+function textMsInFlight() { let n = 0; for (const t of textLog) if (t.end > flipperDone) n += t.ms; return n; }
+// How long the board still needs for the text it has (ms)
+function flipperBusyMs() { return progressChar ? textMsInFlight() : backlog(); }
+
+async function setupProgress(svc) {
+  progressChar = null; progressNotify = false; textLog = []; sentBytes = 0; flipperDone = 0;
+  let ch;
+  try { ch = await svc.getCharacteristic(PROGRESS_CHAR); } catch (_) { return; }   // older Flipper app
+  const first = await ch.readValue();
+  progBase = first.getUint32(0, true);
+  progressAt = performance.now();
+  try {
+    if (!progressListening.has(ch)) {
+      ch.addEventListener("characteristicvaluechanged", (e) => { if (ch === progressChar) readProgress(e.target.value); });
+      progressListening.add(ch);
+    }
+    await ch.startNotifications();
+    progressNotify = true;
+  } catch (_) { /* no notifications: we read it when we need it */ }
+  progressChar = ch;
+  readProgress(first);   // state (stored text, Caps Lock) without acting on old Caps Lock presses
+}
+
+// Web Bluetooth allows one GATT operation at a time: run them in order
+let gattChain = Promise.resolve();
+function gatt(fn) { const p = gattChain.then(fn); gattChain = p.catch(() => {}); return p; }
+
+async function refreshProgress() {
+  const ch = progressChar;
+  if (!ch) return;
+  try { const v = await gatt(() => ch.readValue()); if (ch === progressChar) readProgress(v); } catch (_) {}
+}
+
+// Wait until the board has typed everything sent so far (or cancelled() / disconnect)
+async function waitFlipperDone(cancelled) {
+  while (connected && progressChar && !cancelled() && (queue.length || pumping || inFlight() > 0)) {
+    const stale = performance.now() - progressAt > (progressNotify ? 1000 : 200);
+    if (stale && !paused && !pumping && !queue.length) await refreshProgress();
+    await sleep(30);
+  }
+}
+
+let sendFails = 0, sendErrShown = false;
+async function pump() {
+  if (pumping || !connected) return;
+  pumping = true;
+  let retryIn = 0;
+  try {
+    for (;;) {
+      if (!connected) break;
+      if ((delayDirty || stopPending || releasePending || resumePending) && cfgChar) {   // settings use the same one-at-a-time queue
+        const d = typeDelay(), flags = (stopPending ? 1 : 0) | (paused ? 2 : 0) | (releasePending ? 4 : 0) | (resumePending ? 8 : 0) | (playing ? 16 : 0);
+        delayDirty = false; stopPending = false; releasePending = false; resumePending = false;
+        try {
+          // [3] = PC layout, so the board presses the right keys for y/z, umlauts, symbols
+          // [4] bit 1 = typos, bits 2-3 = thinking pauses, [5] = WPM for humanized text
+          await gatt(() => cfgChar.writeValueWithResponse(new Uint8Array([d & 0xFF, d >> 8, flags, GERMAN_PC ? 1 : 0,
+                                                                          ($("typos").checked ? 2 : 0) | (thinkLevel() << 2), humanWpm()])));
+        } catch (e) {
+          delayDirty = true; if (flags & 1) stopPending = true; if (flags & 4) releasePending = true; if (flags & 8) resumePending = true;   // try again
+          throw e;
+        }
+        if (flags & 1) textLog = [];   // Stop: the board throws away what it had
+      }
+      flushMotion();
+      if (!queue.length) {
+        // A setting, Stop, Pause or release may have come in while the last write
+        // was in flight: send it now instead of waiting for the next input
+        if (cfgChar && (delayDirty || stopPending || releasePending || resumePending)) continue;
+        break;
+      }
+
+      if (progressChar) {
+        if (inFlight() + queue[0].length > FLOW_MAX) {
+          // Wait for the board to make room. Notifications normally tell us; read it if they're late.
+          if (!paused && performance.now() - progressAt > (progressNotify ? 500 : 150)) {
+            await refreshProgress();
+            if (inFlight() + queue[0].length <= FLOW_MAX) continue;
+          }
+          retryIn = paused ? 300 : 100;
+          break;
+        }
+      } else if (backlog() > BACKLOG_MAX_MS) {   // older Flipper app: time estimate
+        retryIn = Math.min(250, backlogMs - BACKLOG_MAX_MS + 10);
+        break;
+      }
+
+      // One write = as many whole packets as fit
+      const pk = [];
+      let size = 0, cost = 0;
+      while (queue.length && size + queue[0].length <= MAX_WRITE) {
+        const p = queue[0];
+        if (progressChar ? inFlight() + size + p.length > FLOW_MAX
+                         : pk.length && backlogMs + cost + packetCost(p) > BACKLOG_MAX_MS) break;
+        pk.push(queue.shift()); size += p.length; cost += packetCost(p);
+      }
+      if (!pk.length) { const p = queue.shift(); pk.push(p); size = p.length; cost = packetCost(p); }   // (oversized packet)
+      try {
+        await gatt(() => rxChar.writeValueWithResponse(new Uint8Array([].concat(...pk))));
+      } catch (e) {
+        queue.unshift(...pk);   // nothing is lost: retried below
+        throw e;
+      }
+      if (!progressChar) backlogMs += cost;
+      for (const p of pk) {
+        sentBytes += p.length;
+        if (p[0] === OP.STORE_END) storeEndAt = sentBytes;
+        if (p[0] === OP.TEXT || p[0] === OP.HTEXT)
+          textLog.push({ end: sentBytes, letters: p[1], ms: p[1] * (p[0] === OP.HTEXT ? humanMsPerLetter() : msPerLetter()) });
+      }
+      sendFails = 0;
+    }
+  } catch (e) {
+    sendFails++;
+    if (sendFails >= 3) { showErr("Sending is having trouble, retrying… (" + e.message + ")"); sendErrShown = true; }
+    retryIn = Math.min(2000, 200 * sendFails);
+  } finally {
+    pumping = false;
+  }
+  if (retryIn && connected && !pumpTimer) pumpTimer = setTimeout(() => { pumpTimer = null; pump(); }, retryIn);
+  if (sendFails === 0 && sendErrShown) { showErr(""); sendErrShown = false; }
+}
+
+// Keep the phone screen on while connected: if it locks, the page stops
+// sending and typing on the PC stalls until the phone wakes up again.
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && !wakeLock && navigator.wakeLock && document.visibilityState === "visible") {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } else if (!on && wakeLock) {
+      const w = wakeLock; wakeLock = null; await w.release();
+    }
+  } catch (_) {}
+}
+document.addEventListener("visibilitychange", () => { if (connected) keepAwake(true); });
+document.addEventListener("pointerdown", () => { if (connected && !wakeLock) keepAwake(true); }, true);
+
+// ---------------- keys / modifiers ----------------
+let mods = 0;
+function clearMods() {
+  mods = 0;
+  document.querySelectorAll("button.mod").forEach((b) => b.classList.remove("on"));
+}
+function tap(key, extraMods = 0) {
+  send(OP.TAP, (mods | extraMods) & 0xFF, key);
+  if (mods) clearMods();
+}
+
+document.querySelectorAll("button.mod").forEach((b) => {
+  b.onclick = () => { mods ^= +b.dataset.mod; b.classList.toggle("on", !!(mods & +b.dataset.mod)); };
+});
+document.querySelectorAll("button[data-key]").forEach((b) => {
+  b.onclick = () => tap(+b.dataset.key);
+});
+document.querySelectorAll("button[data-combo]").forEach((b) => {
+  b.onclick = () => { const [m, k] = b.dataset.combo.split(",").map(Number); tap(k, m); };
+});
+document.querySelectorAll("button[data-consumer]").forEach((b) => {
+  b.onclick = () => { const c = +b.dataset.consumer; send(OP.CONSUMER, c & 0xFF, c >> 8); };
+});
+for (let i = 1; i <= 12; i++) {
+  const b = document.createElement("button");
+  b.textContent = "F" + i;
+  b.onclick = () => tap(0x39 + i);
+  $("fkeys").appendChild(b);
+}
+$("moreBtn").onclick = () => $("more").classList.toggle("open");
+
+// The PC uses a German (DE/AT) layout: there Y and Z swap places, so a
+// shortcut like Ctrl+Z must press the key that is "Y" on a US keyboard.
+const GERMAN_PC = true;
+
+// Character -> HID usage, used only when a modifier is armed (and for macros)
+function charToKey(ch) {
+  const c = ch.toLowerCase();
+  if (GERMAN_PC && c === "z") return 0x1C;
+  if (GERMAN_PC && c === "y") return 0x1D;
+  if (c >= "a" && c <= "z") return 0x04 + c.charCodeAt(0) - 97;
+  if (c >= "1" && c <= "9") return 0x1E + c.charCodeAt(0) - 49;
+  const map = { "0": 0x27, " ": 0x2C, "-": 0x2D, "=": 0x2E, "[": 0x2F, "]": 0x30, "\\": 0x31,
+    ";": 0x33, "'": 0x34, "`": 0x35, ",": 0x36, ".": 0x37, "/": 0x38, "\n": 0x28, "\t": 0x2B };
+  return map[c] || 0;
+}
+
+// Normalise phone-keyboard characters to what the board can type:
+// ASCII plus the German keys (umlauts, ß, §, °, ´, ², ³, €, µ).
+function toAscii(s) {
+  return s.normalize("NFC").replace(/[‘’‚′]/g, "'").replace(/[“”„″]/g, '"')
+    .replace(/[–—−]/g, "-").replace(/…/g, "...").replace(/ /g, " ")
+    .replace(/[^\x09\x0A\x20-\x7EäöüÄÖÜß§°´²³€µ]/g, "");
+}
+
+// human: typed like a person if Humanize is on (Send text, Clipboard, macros);
+// live typing on the phone keyboard is always sent as is
+function typeText(s, human = false) {
+  s = toAscii(s);
+  if (!s) return;
+  const op = human && humanOn() ? OP.HTEXT : OP.TEXT;
+  if (mods) {                          // e.g. Ctrl armed + "c" => Ctrl+C
+    for (const ch of s) { const k = charToKey(ch); if (k) tap(k); }
+    return;
+  }
+  // Sent as UTF-8; the board app decodes it (also across packet borders)
+  const bytes = Array.from(new TextEncoder().encode(s));
+  for (let i = 0; i < bytes.length; i += TEXT_CHUNK) {
+    const part = bytes.slice(i, i + TEXT_CHUNK);
+    send(op, part.length, ...part);
+  }
+}
+
+// ---------------- phone keyboard capture ----------------
+// Android keyboards (Gboard, Samsung) don't send real key events; they edit the
+// text field. So we keep a hidden "shadow" value and diff it after every
+// change: removed chars => Backspace, added chars => typed text.
+const kbd = $("kbd");
+const PAD = "​​​​​​​​"; // lets Backspace work on an "empty" field
+let shadow = PAD, composing = false;
+kbd.value = PAD;
+
+function resetField() {
+  shadow = PAD; kbd.value = PAD;
+  try { kbd.setSelectionRange(PAD.length, PAD.length); } catch (e) {}
+}
+
+function diffAndSend() {
+  const now = kbd.value;
+  const a = [...shadow], b = [...now];
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  const removed = a.length - i;
+  const added = b.slice(i).join("").replace(/​/g, "");
+  for (let k = 0; k < removed; k++) tap(KEY.BKSP);
+  if (added) typeText(added);
+  shadow = now;
+  if (!composing && (now.length > 60 || !now.startsWith(PAD.slice(0, 2)))) resetField();
+}
+
+kbd.addEventListener("compositionstart", () => { composing = true; });
+kbd.addEventListener("compositionend", () => { composing = false; diffAndSend(); });
+kbd.addEventListener("input", diffAndSend);
+kbd.addEventListener("keydown", (e) => {
+  // Enter and a few hardware-style keys do arrive as real key events
+  if (e.key === "Enter") { e.preventDefault(); tap(KEY.ENTER); resetField(); }
+  else if (e.key === "Tab") { e.preventDefault(); tap(KEY.TAB); }
+  else if (e.key === "Backspace" && kbd.value.length === 0) { e.preventDefault(); tap(KEY.BKSP); resetField(); }
+});
+kbd.addEventListener("focus", () => setTimeout(() => kbd.setSelectionRange(kbd.value.length, kbd.value.length), 0));
+
+$("raw").onchange = (e) => {
+  // "visible-password" style input disables suggestions/autocorrect on most Android keyboards
+  kbd.type = e.target.checked ? "password" : "text";
+  resetField(); kbd.focus();
+};
+
+// ---------------- letter delay ----------------
+// Pause the board makes after each typed letter. Higher = slower typing,
+// for apps or PCs that drop letters. Remembered on this phone.
+let delayDirty = false, stopPending = false, paused = false;
+// Slider positions -> ms (fine steps at the fast end, big steps at the slow end)
+const DELAY_STEPS = [0, 1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50, 60, 75, 100, 125, 150, 200, 250,
+                     300, 400, 500, 600, 750, 1000, 1250, 1500, 2000, 3000, 4000, 5000];
+function typeDelay() { return DELAY_STEPS[Math.max(0, Math.min(DELAY_STEPS.length - 1, Math.round(+$("typeDelay").value)))]; }
+// Time the board needs per letter: the delay plus the USB key press/release.
+// Kept on the safe side (8 ms), so the page never gets ahead of the board.
+function msPerLetter() { return (cfgChar ? typeDelay() : 2) + 8; }
+// Tell the board to stop typing and drop whatever it still has queued
+function stopTyping() {
+  queue = []; backlogMs = 0; setPaused(false, false); stopPending = true; pump();
+  if (storing) { storing = false; storedText = null; scheduleStore(1500); }   // its packets were dropped: store it again
+}
+
+// Pause: the board holds everything it has queued (mid-text too) until Resume.
+// Sent text and macros wait as well, and new touchpad/keyboard input is ignored.
+function setPaused(on, tell = true) {
+  paused = on;
+  updatePauseButtons();
+  if (on) setStatus("Paused", connected);
+  else if (connected) setStatus("Connected: " + device.name, true);
+  if (tell) { delayDirty = true; pump(); }
+}
+// Wait ms of un-paused time (paused time doesn't count); stops early when cancelled() is true
+async function runningWait(ms, cancelled) {
+  let left = ms, last = performance.now();
+  while (left > 0 && !cancelled()) {
+    await sleep(Math.min(50, Math.max(1, left)));
+    const now = performance.now();
+    if (!paused && !capsPaused) left -= now - last;   // (Caps Lock pause on the board too)
+    last = now;
+  }
+}
+async function whilePaused(cancelled) { while ((paused || capsPaused) && connected && !cancelled()) await sleep(50); }
+(function () {
+  const el = $("typeDelay"), out = $("typeDelayVal");
+  try {
+    const v = localStorage.getItem("phonekb.typeDelay");   // saved in ms
+    if (v !== null) {
+      let best = 0;
+      DELAY_STEPS.forEach((ms, i) => { if (Math.abs(ms - +v) < Math.abs(DELAY_STEPS[best] - +v)) best = i; });
+      el.value = best;
+    }
+  } catch (e) {}
+  const show = () => { const d = typeDelay(); out.textContent = d >= 1000 ? (d / 1000) + " s" : d + " ms"; };
+  show();
+  el.addEventListener("input", () => {
+    show();
+    try { localStorage.setItem("phonekb.typeDelay", String(typeDelay())); } catch (e) {}
+    delayDirty = true; pump();
+  });
+})();
+
+// ---------------- humanize ----------------
+// Typing like a person is done on the board (exact timing on USB): the page
+// only sends the speed and whether to make typos, and marks text as "humanized".
+let flipperVersion = 0;
+function thinkLevel() { return Math.max(0, Math.min(3, +$("think").value || 0)); }
+function humanWpm() { return Math.max(15, Math.min(150, Math.round(+$("wpm").value || 55))); }
+function humanOn() { return $("human").checked && flipperVersion >= 2; }
+function humanMsPerLetter() { return 12000 / humanWpm() * 1.1; }   // average incl. pauses
+function checkHumanSupport() {
+  if ($("human").checked && cfgChar && flipperVersion < 2)
+    showErr("Humanize needs a newer firmware on the board; text is typed normally until then.");
+}
+(function () {
+  const human = $("human"), wpm = $("wpm"), out = $("wpmVal"), typos = $("typos"), think = $("think");
+  try {
+    human.checked = localStorage.getItem("phonekb.human") === "1";
+    const w = localStorage.getItem("phonekb.wpm"); if (w) wpm.value = w;
+    typos.checked = localStorage.getItem("phonekb.typos") === "1";
+    const th = localStorage.getItem("phonekb.think"); if (th) think.value = th;
+  } catch (e) {}
+  const show = () => { out.textContent = humanWpm() + " WPM"; $("settings").classList.toggle("human-on", human.checked); };
+  const save = () => {
+    show();
+    try {
+      localStorage.setItem("phonekb.human", human.checked ? "1" : "0");
+      localStorage.setItem("phonekb.wpm", String(humanWpm()));
+      localStorage.setItem("phonekb.typos", typos.checked ? "1" : "0");
+      localStorage.setItem("phonekb.think", String(thinkLevel()));
+    } catch (e) {}
+    delayDirty = true; pump();   // send speed/typos to the board
+    if (connected) checkHumanSupport();
+  };
+  show();
+  human.addEventListener("change", () => { save(); if (storedText) scheduleStore(100); });
+  wpm.addEventListener("input", save); typos.addEventListener("change", save);
+  think.addEventListener("change", save);
+})();
+
+// ---------------- bulk text ----------------
+let bulkCancel = false;
+let bulkRunning = false;
+$("sendBulk").onclick = () => {
+  const raw = $("bulk").value, why = bulkBlocked(raw);
+  if (why) { showErr(why); return; }   // nothing is typed: the box text stays stored
+  if (paused) setPaused(false);   // first, so clearing the stored copy isn't held back
+  markBoxTyped();   // typing it now uses it up: don't (also) leave it stored for Caps Lock
+  typeBulk(raw);
+};
+// Why a text can't be typed right now ("" = it can)
+function bulkBlocked(raw) {
+  if (bulkRunning) return "Already typing: tap Stop first.";
+  if (!connected) return "Connect to the board first.";
+  if (flipperRunning) return "The board is still typing a text: wait, or tap Stop first.";
+  if (playing) return "A macro is playing: stop it first.";
+  if (!toAscii(raw)) return raw ? "Nothing to type: the board can't type these characters (emoji and the like)." : "There's no text to type.";
+  return "";
+}
+// The box text is being typed: it must not be stored (again) for Caps Lock afterwards
+function markBoxTyped() {
+  typedText = $("bulk").value;
+  clearTimeout(storeTimer); storeTimer = null;
+  if (storedReady || storing || storedText !== null) clearStored();
+  showStoreInfo();
+}
+
+// ---------------- stored text ----------------
+// The text in the box is sent to the board in advance and saved there. Then a
+// Caps Lock press on the PC makes the board type it by itself, even with the
+// phone locked. It's used once; edit or paste new text to store it again.
+let storeTimer = null, storing = false, storedReady = false, storedText = null, typedText = null;
+let storeEndAt = 0, storeFailed = false;   // sentBytes after the last STORE_END; the board refused it
+const STORE_MAX_CHARS = 20000;
+function storeAvailable() { return connected && flipperVersion >= 3 && $("capsClip").checked; }
+function showStoreInfo() {
+  const el = $("storeInfo"), box = $("bulk").value;
+  let text = "", ok = false;
+  if (connected && flipperVersion >= 3 && $("capsClip").checked && box) {
+    if (typedText !== box && toAscii(box).length > STORE_MAX_CHARS) text = "Too long to store on the board (over 20,000 characters): tap Send text instead (keep the phone on).";
+    else if (storeFailed && typedText !== box) text = "The board couldn't keep the text, so Caps Lock can't type it: tap Send text instead.";
+    else if (storedReady && storedText === box) { text = "✓ Stored on the board: press Caps Lock on the PC to type it (you can lock the phone)"; ok = true; }
+    else if (typedText === box) text = "Typed on the PC. Edit or paste new text to store it again.";
+    else text = "Sending the text to the board…";
+  }
+  el.textContent = text;
+  el.classList.toggle("ready", ok);
+  const c = document.getElementById("cStore");   // (the Claude panel shows it too)
+  if (c) { c.textContent = text; c.classList.toggle("ready", ok); }
+}
+function setStoredReady(on) {
+  if (on === storedReady) return;
+  if (!on && storedReady && !storing && storedText !== null) typedText = storedText;   // the board typed it (used once)
+  if (on) storing = false;
+  storedReady = on;
+  showStoreInfo();
+}
+function scheduleStore(ms) { clearTimeout(storeTimer); storeTimer = setTimeout(storeNow, ms); showStoreInfo(); }
+function sendStore(text, human) {
+  storing = true; storeEndAt = 0; storeFailed = false;
+  send(OP.STORE_BEGIN);
+  const bytes = Array.from(new TextEncoder().encode(text));
+  for (let i = 0; i < bytes.length; i += TEXT_CHUNK) {
+    const part = bytes.slice(i, i + TEXT_CHUNK);
+    send(OP.STORE_DATA, part.length, ...part);
+  }
+  send(OP.STORE_END, human ? 1 : 0);
+}
+function clearStored() { if (connected && flipperVersion >= 3) { sendStore("", false); storing = false; } storedText = null; showStoreInfo(); }
+function storeNow() {
+  storeTimer = null;
+  if (!connected || flipperVersion < 3) return;
+  if (paused || bulkRunning) { scheduleStore(1500); return; }   // input is held while paused; don't mix with typing
+  const box = $("bulk").value;
+  let text = $("capsClip").checked && box !== typedText ? toAscii(box) : "";
+  if (text.length > STORE_MAX_CHARS) text = "";   // too long: never store a cut-off text (Send text streams it)
+  sendStore(text, humanOn());
+  if (!text) storing = false;
+  storedText = text ? box : null;
+  showStoreInfo();
+}
+$("bulk").addEventListener("input", () => { typedText = null; scheduleStore(800); });
+$("capsClip").addEventListener("change", () => scheduleStore(100));
+// Type whatever was last copied on the phone (the browser may ask to allow pasting)
+$("clipBulk").onclick = async () => {
+  if (!connected) { showErr("Connect to the board first."); return; }
+  let text = "";
+  try { text = await navigator.clipboard.readText(); }
+  catch (e) { showErr("This browser didn't allow reading the clipboard. Paste into the box and tap Send text instead."); return; }
+  if (!text) { showErr("The clipboard is empty."); return; }
+  showErr("");
+  typeBulk(text);
+};
+// capsBefore: Caps Lock state before the user's start press (Caps Lock start), else null
+async function typeBulk(raw, capsBefore = null) {
+  const why = bulkBlocked(raw);
+  if (why) {
+    showErr(why);
+    if (capsBefore !== null) restoreCaps(capsBefore);   // a Caps Lock start that types nothing: undo the press
+    return;
+  }
+  if (paused) setPaused(false);   // a new text means "go": nothing is sent while paused
+  // Macro recording: one text step (the packets below aren't recorded one by one)
+  if (recording && !playing) rec({ t: "text", s: toAscii(raw) });
+  bulkRunning = true;
+  try {
+    // Preferred: send the whole text first, the board types it by itself
+    if (await typeOnFlipper(raw, capsBefore)) return;
+    // Fallback (older Flipper app, very long text, Flipper couldn't save it): the old way
+    jobBegin(capsBefore);
+    try { await typeBulkNow(raw); } finally { jobEnd(); }
+  } finally { bulkRunning = false; }
+}
+
+// Send the whole text to the board, which saves it and types it by itself, so
+// locking the phone or losing the connection doesn't stop it any more.
+// Returns true if the board took it (or it was cancelled), false = stream it instead.
+const RUN_MAX_CHARS = 20000;
+async function typeOnFlipper(raw, capsBefore) {
+  if (!connected || flipperVersion < 5 || !progressChar) return false;
+  if (mods) return false;   // Ctrl/Alt/... armed: send as shortcuts, the old way
+  const text = toAscii(raw);
+  if (!text) return true;
+  if (text.length > RUN_MAX_CHARS) return false;
+  const bytes = Array.from(new TextEncoder().encode(text));
+  const runsBefore = runsAccepted, doneBefore = flipperDone;
+  const total = 1 + 2 + bytes.length + 2 * Math.ceil(bytes.length / TEXT_CHUNK);
+  bulkCancel = false;
+  send(OP.RUN_BEGIN);
+  for (let i = 0; i < bytes.length; i += TEXT_CHUNK) {
+    const part = bytes.slice(i, i + TEXT_CHUNK);
+    send(OP.RUN_DATA, part.length, ...part);
+  }
+  send(OP.RUN_END, (humanOn() ? 1 : 0) | (capsBefore === null ? 0 : (2 | (capsBefore ? 4 : 0))));
+  await waitFlipperDone(() => {
+    if (!paused) setStatus(`Sending the text to the board… ${Math.min(99, Math.round((flipperDone - doneBefore) / total * 100))}%`, connected);
+    return bulkCancel;
+  });
+  if (bulkCancel) return true;
+  if (!connected) {
+    showErr("The connection was lost while sending the text. If it had reached the board completely, the board types it anyway.");
+    return true;
+  }
+  if (runsAccepted === runsBefore) {   // the board couldn't save it (e.g. SD card)
+    showErr("The board couldn't keep the text, so it's sent while typing instead (the phone has to stay on).");
+    return false;
+  }
+  // Taken: the board types it alone. Wait until it's done (or Stop / connection lost).
+  let lastRead = performance.now();
+  while (connected && flipperRunning && !bulkCancel) {
+    if (!paused && !capsPaused) setStatus("Typing on the board… (you can lock the phone now)", true);
+    await sleep(100);
+    if (!progressNotify && performance.now() - lastRead > 1000) { lastRead = performance.now(); await refreshProgress(); }
+  }
+  if (!connected && !bulkCancel)
+    showErr("The connection was lost, but the board has the whole text and keeps typing it.");
+  else if (connected && !paused) setStatus("Connected: " + device.name, true);
+  return true;
+}
+
+// A "text job" (Send text, Clipboard, a macro's text): the board switches Caps Lock
+// off for typing (with it on, some PCs shift every key: , -> ;  ß -> ?) and puts it
+// back the way it was at the end, also after Stop or a lost connection.
+function jobsSupported() { return connected && flipperVersion >= 4; }
+function jobBegin(capsBefore = null) {
+  if (!jobsSupported()) return;
+  send(OP.JOB_BEGIN, capsBefore === null ? 0 : (1 | (capsBefore ? 2 : 0)));
+}
+function jobEnd() { if (jobsSupported()) send(OP.JOB_END); }
+async function typeBulkNow(raw) {
+  const text = toAscii(raw);
+  bulkCancel = false;
+  for (let i = 0; i < text.length && !bulkCancel; i += 100) {
+    await whilePaused(() => bulkCancel);
+    if (bulkCancel) break;
+    if (!connected) {   // don't silently drop the rest: the board threw away what it had queued
+      showErr(`The connection dropped while typing (about ${Math.max(0, i - lettersInFlight())} of ${text.length} characters typed). Send the rest again once it's back.`);
+      return;
+    }
+    typeText(text.slice(i, i + 100), true);
+    const sentChars = Math.min(i + 100, text.length);
+    const show = () => { if (!paused && !capsPaused) setStatus(`Typing ${Math.max(0, sentChars - lettersInFlight())}/${text.length}…`, connected); };
+    show();
+    if (progressChar) {
+      // Hand the next part over as soon as this one has gone out; flow control
+      // keeps the board supplied, and little waits on the phone so Stop/Pause act at once
+      while (!bulkCancel && connected && (queue.length || pumping)) { await sleep(30); show(); }
+    } else {
+      // older Flipper app: don't send faster than it types (its buffer is 2 KB)
+      await runningWait(100 * msPerLetter(), () => bulkCancel);
+    }
+  }
+  if (progressChar && !bulkCancel) await waitFlipperDone(() => { if (!paused && !capsPaused) setStatus(`Typing ${text.length - lettersInFlight()}/${text.length}…`, connected); return bulkCancel; });
+  if (!bulkCancel && !connected) showErr("The connection dropped before the board finished typing. Send the rest again once it's back.");
+  if (connected && !paused) setStatus("Connected: " + device.name, true);
+}
+$("pauseBulk").onclick = togglePause;
+$("stopBulk").onclick = () => { bulkCancel = true; stopTyping(); send(OP.RELEASE); };
+
+// ---------------- mouse buttons ----------------
+document.querySelectorAll("button[data-mouse]").forEach((b) => {
+  const btn = +b.dataset.mouse;
+  b.addEventListener("pointerdown", (e) => { e.preventDefault(); b.classList.add("held"); send(OP.DOWN, btn); });
+  const up = () => { if (b.classList.contains("held")) { b.classList.remove("held"); send(OP.UP, btn); } };
+  b.addEventListener("pointerup", up); b.addEventListener("pointercancel", up); b.addEventListener("pointerleave", up);
+});
+
+// ---------------- touchpad ----------------
+const pad = $("pad");
+const pts = new Map();          // pointerId -> {x, y, sx, sy, t}
+let gesture = null;             // null | "move" | "scroll"
+let maxFingers = 0, downTime = 0, moved = false, dragging = false, lastTapTime = 0;
+
+function speed() { return +$("speed").value; }
+
+// Touch speed: remembered on this phone
+(function () {
+  const el = $("speed"), out = $("speedVal");
+  try { const v = localStorage.getItem("phonekb.speed"); if (v) el.value = v; } catch (e) {}
+  const show = () => { out.textContent = (+el.value).toFixed(1); };
+  show();
+  el.addEventListener("input", () => { show(); try { localStorage.setItem("phonekb.speed", el.value); } catch (e) {} });
+})();
+
+// Hold click: tap once to press and hold the left button, tap again to release.
+// A tap on the touchpad while held also releases it.
+let leftLocked = false;
+function setLock(on) {
+  if (on === leftLocked) return;
+  leftLocked = on;
+  send(on ? OP.DOWN : OP.UP, 1);
+  $("lock").classList.toggle("on", on);
+  $("lock").textContent = on ? "Holding…" : "Hold click";
+}
+$("lock").onclick = () => setLock(!leftLocked);
+
+// Long-press on the touchpad must never open the phone's copy/search menu
+pad.addEventListener("contextmenu", (e) => e.preventDefault());
+pad.addEventListener("selectstart", (e) => e.preventDefault());
+
+pad.addEventListener("pointerdown", (e) => {
+  pad.setPointerCapture(e.pointerId);
+  pts.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+  if (pts.size === 1) {
+    downTime = performance.now(); moved = false; maxFingers = 1; gesture = "move";
+    // tap then quickly touch again and hold => drag (left button held)
+    if (!leftLocked && downTime - lastTapTime < 300) { dragging = true; send(OP.DOWN, 1); }
+  } else {
+    maxFingers = Math.max(maxFingers, pts.size); gesture = "scroll";
+  }
+});
+
+pad.addEventListener("pointermove", (e) => {
+  const p = pts.get(e.pointerId);
+  if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (Math.hypot(p.x - p.sx, p.y - p.sy) > 8) moved = true;
+  if (gesture === "move" && pts.size === 1) {
+    const v = Math.hypot(dx, dy);
+    const gain = speed() * (1 + Math.min(v, 40) / 12);   // simple acceleration curve
+    moveX += dx * gain; moveY += dy * gain;
+    pump();
+  } else if (gesture === "scroll") {
+    // average of fingers; natural direction like a phone (drag up = scroll down)
+    scrollAcc += (-dy / pts.size) * 0.08 * +$("scrollSpeed").value;
+    pump();
+  }
+});
+
+function endPointer(e) {
+  if (!pts.has(e.pointerId)) return;
+  pts.delete(e.pointerId);
+  if (pts.size > 0) return;
+  const dur = performance.now() - downTime;
+  if (dragging) { dragging = false; send(OP.UP, 1); }
+  else if (leftLocked && !moved && dur < 250) { setLock(false); }
+  else if (!moved && dur < 250) {
+    if (maxFingers >= 2) { send(OP.DOWN, 2); send(OP.UP, 2); }
+    else { send(OP.DOWN, 1); send(OP.UP, 1); lastTapTime = performance.now(); }
+  }
+  gesture = null;
+}
+pad.addEventListener("pointerup", endPointer);
+pad.addEventListener("pointercancel", endPointer);
+
+// ================= macros: record, edit, play =================
+// A macro is a list of steps. Recording watches everything this page sends
+// to the board and turns it into editable steps, with Wait steps for pauses.
+const MODS = { CTRL: 1, CONTROL: 1, SHIFT: 2, ALT: 4, GUI: 8, WIN: 8, WINDOWS: 8, COMMAND: 8 };
+const KEYNAMES = { ENTER: 0x28, RETURN: 0x28, ESC: 0x29, ESCAPE: 0x29, BACKSPACE: 0x2A, TAB: 0x2B, SPACE: 0x2C,
+  CAPSLOCK: 0x39, PRINTSCREEN: 0x46, SCROLLLOCK: 0x47, PAUSE: 0x48, INSERT: 0x49, HOME: 0x4A, PAGEUP: 0x4B,
+  DELETE: 0x4C, DEL: 0x4C, END: 0x4D, PAGEDOWN: 0x4E, RIGHT: 0x4F, RIGHTARROW: 0x4F, LEFT: 0x50, LEFTARROW: 0x50,
+  DOWN: 0x51, DOWNARROW: 0x51, UP: 0x52, UPARROW: 0x52, MENU: 0x65, APP: 0x65 };
+const KEY_OUT = { 0x28: "ENTER", 0x29: "ESC", 0x2A: "BACKSPACE", 0x2B: "TAB", 0x2C: "SPACE", 0x39: "CAPSLOCK",
+  0x46: "PRINTSCREEN", 0x49: "INSERT", 0x4A: "HOME", 0x4B: "PAGEUP", 0x4C: "DELETE", 0x4D: "END", 0x4E: "PAGEDOWN",
+  0x4F: "RIGHT", 0x50: "LEFT", 0x51: "DOWN", 0x52: "UP", 0x65: "MENU" };
+const MEDIA = { 234: "Volume down", 233: "Volume up", 226: "Mute", 205: "Play/Pause", 181: "Next track", 182: "Previous track" };
+const BTN = { 1: "Left", 2: "Right", 4: "Middle" };
+const KIND = { text: "Type", key: "Key", click: "Click", move: "Move", corner: "Corner", press: "Btn down",
+  release: "Btn up", scroll: "Scroll", media: "Media", delay: "Wait" };
+
+function keyToName(m, k) {
+  const parts = [];
+  if (m & 1) parts.push("CTRL"); if (m & 4) parts.push("ALT"); if (m & 2) parts.push("SHIFT"); if (m & 8) parts.push("GUI");
+  let n = KEY_OUT[k];
+  if (!n && GERMAN_PC && k === 0x1C) n = "z";
+  else if (!n && GERMAN_PC && k === 0x1D) n = "y";
+  else if (!n && k >= 0x04 && k <= 0x1D) n = String.fromCharCode(97 + k - 0x04);
+  else if (!n && k >= 0x1E && k <= 0x26) n = String(k - 0x1D);
+  else if (!n && k === 0x27) n = "0";
+  else if (!n && k >= 0x3A && k <= 0x45) n = "F" + (k - 0x39);
+  else if (!n && k) { const c = Object.entries({ "-": 0x2D, "=": 0x2E, "[": 0x2F, "]": 0x30, "\\": 0x31, ";": 0x33, "'": 0x34, "`": 0x35, ",": 0x36, ".": 0x37, "/": 0x38 }).find(([, v]) => v === k); n = c ? c[0] : "0x" + k.toString(16); }
+  if (n) parts.push(n);
+  return parts.join(" ");
+}
+function parseKey(str) {
+  let m = 0, k = 0;
+  for (const tok of String(str).trim().split(/[\s+]+/)) {
+    if (!tok) continue;
+    const u = tok.toUpperCase();
+    if (MODS[u]) m |= MODS[u];
+    else if (KEYNAMES[u]) k = KEYNAMES[u];
+    else if (/^F([1-9]|1[0-2])$/.test(u)) k = 0x39 + +u.slice(1);
+    else if (/^0X[0-9A-F]{1,2}$/.test(u)) k = parseInt(u, 16);
+    else if (tok.length === 1 && charToKey(tok)) k = charToKey(tok);
+    else return null;
+  }
+  return (m || k) ? { m, k } : null;
+}
+
+// ---- storage ----
+let macros = {}, curName = "Macro 1";
+try { macros = JSON.parse(localStorage.getItem("phonekb.macros") || "{}") || {}; curName = localStorage.getItem("phonekb.macro") || curName; } catch (e) {}
+if (!Object.keys(macros).length) macros[curName] = [];
+if (!macros[curName]) curName = Object.keys(macros)[0];
+let saveTimer = 0;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem("phonekb.macros", JSON.stringify(macros)); localStorage.setItem("phonekb.macro", curName); } catch (e) {}
+  }, 300);
+}
+const steps = () => macros[curName];
+
+// ---- recording ----
+let recording = false, playing = false, lastRecT = null, lastStepT = 0;
+function rec(step) {
+  if (!recording || playing) return;
+  const now = performance.now(), list = steps(), last = list[list.length - 1];
+  const gap = lastRecT == null ? 0 : now - lastRecT;
+  let merged = false;
+  if (last && step.t === "move" && last.t === "move" && now - lastStepT < 80) { last.x += step.x; last.y += step.y; merged = true; }
+  else if (last && step.t === "scroll" && last.t === "scroll" && now - lastStepT < 150) { last.n += step.n; merged = true; }
+  else if (last && step.t === "text" && last.t === "text" && gap < 1500) { last.s += step.s; merged = true; }
+  else if (last && step.t === "key" && last.t === "key" && last.k === step.k && gap < 1500) { last.n = (last.n || 1) + 1; merged = true; }
+  else if (last && step.t === "release" && last.t === "press" && last.b === step.b && gap < 400) { last.t = "click"; merged = true; }
+  if (!merged) {
+    if (gap >= 60) list.push({ t: "delay", ms: Math.round(gap / 10) * 10 });
+    list.push(step); lastStepT = now;
+  }
+  lastRecT = now;
+  save(); showBar();
+}
+function recordBytes(b) {
+  if (!recording || playing || bulkRunning) return;   // Send text / Clipboard are recorded as one step in typeBulk
+  switch (b[0]) {
+    case OP.TAP: rec({ t: "key", k: keyToName(b[1], b[2]) }); break;
+    case OP.DOWN: rec({ t: "press", b: b[1] }); break;
+    case OP.UP: rec({ t: "release", b: b[1] }); break;
+    case OP.CONSUMER: rec({ t: "media", c: b[1] | (b[2] << 8) }); break;
+    case OP.TEXT: rec({ t: "text", s: new TextDecoder().decode(new Uint8Array(b.slice(2, 2 + b[1]))) }); break;
+  }
+}
+function startRec() {
+  if (!connected) { showErr("Connect to the board first, so you can see what you're recording on the PC."); return; }
+  recording = true; lastRecT = null; clearMods();
+  $("mpanel").classList.remove("open");
+  showBar();
+}
+function stopRec() {
+  recording = false; showBar(); save();
+  openPanel();
+}
+function showBar() {
+  const bar = $("recbar");
+  bar.classList.toggle("on", recording || playing);
+  bar.classList.toggle("play", playing);
+  if (recording) $("recText").textContent = `● Recording "${curName}": ${steps().length} steps. Use the touchpad and keyboard as normal.`;
+  $("recBtn").classList.toggle("on", recording);
+  $("playBtn").classList.toggle("on", playing);
+  $("playBtn").textContent = playing ? "■ Stop" : "▶ Play";
+}
+
+// ---- playback ----
+let stopFlag = false;
+async function waitIdle() { while (connected && (pumping || queue.length)) await sleep(10); }
+async function wait(ms) { await runningWait(ms, () => stopFlag); }
+async function runStep(s) {
+  const clamp = (v) => Math.max(-127, Math.min(127, v));
+  switch (s.t) {
+    case "text": {
+      const t = toAscii(s.s || "");
+      let job = false;
+      for (let i = 0; i < t.length && !stopFlag; i += 100) {
+        const part = t.slice(i, i + 100);
+        await whilePaused(() => stopFlag);
+        if (stopFlag) break;
+        if (!job) { jobBegin(); job = true; }   // Caps Lock off while this text is typed
+        typeText(part, true); await waitIdle();
+        // let the board finish typing before the next step
+        if (progressChar) await waitFlipperDone(() => stopFlag);
+        else await wait(part.length * msPerLetter() + 30);
+      }
+      if (job) jobEnd();
+      break;
+    }
+    case "key": {
+      const p = parseKey(s.k), n = Math.max(1, Math.min(999, Math.round(+s.n || 1)));
+      if (p) for (let i = 0; i < n && !stopFlag; i++) {
+        await whilePaused(() => stopFlag);   // input is ignored while paused, so wait instead
+        if (stopFlag) break;
+        send(OP.TAP, p.m, p.k);
+        if (n > 1) { await waitIdle(); await wait(40); }   // small gap so apps register every press
+      }
+      break;
+    }
+    case "click": send(OP.DOWN, s.b); send(OP.UP, s.b); break;
+    case "press": send(OP.DOWN, s.b); break;
+    case "release": send(OP.UP, s.b); break;
+    case "move": {
+      let x = Math.round(+s.x || 0), y = Math.round(+s.y || 0);
+      while (x || y) { const dx = clamp(x), dy = clamp(y); send(OP.MOVE, dx & 0xFF, dy & 0xFF); x -= dx; y -= dy; }
+      break;
+    }
+    case "corner": for (let i = 0; i < 40; i++) send(OP.MOVE, -127 & 0xFF, -127 & 0xFF); break;
+    case "scroll": { let n = Math.round(+s.n || 0); while (n) { const c = clamp(n); send(OP.SCROLL, c & 0xFF); n -= c; } break; }
+    case "media": send(OP.CONSUMER, s.c & 0xFF, s.c >> 8); break;
+    case "delay": await wait(+s.ms || 0); break;
+  }
+  await waitIdle();
+}
+let playingName = null;
+async function playMacro(name, reps = 1, mark = false) {
+  if (playing) { stopPlay(); return; }
+  if (!connected) { showErr("Connect to the board first."); return; }
+  if (recording) stopRec();
+  const list = macros[name];
+  if (!list || !list.length) { showErr(`"${name}" has no steps yet.`); return; }
+  if (flipperRunning || bulkRunning) { showErr("A text is still being typed: wait, or tap Stop first."); return; }
+  showErr(""); clearMods(); playing = true; playingName = name; stopFlag = false; showBar(); renderRemote();
+  delayDirty = true; pump();   // the board: Caps Lock now pauses, it doesn't start a text
+  try {
+    for (let r = 0; r < reps && !stopFlag; r++) {
+      for (let i = 0; i < list.length && !stopFlag && connected; i++) {
+        $("recText").textContent = `▶ Playing "${name}": step ${i + 1}/${list.length}` + (reps > 1 ? `, run ${r + 1}/${reps}` : "");
+        if (mark) markStep(i);
+        await whilePaused(() => stopFlag || !connected);
+        if (stopFlag || !connected) break;
+        await runStep(list[i]);
+      }
+    }
+  } finally {
+    if (stopFlag && connected) { queue = []; send(OP.RELEASE); }
+    playing = false; playingName = null; markStep(-1); showBar(); renderRemote();
+    delayDirty = true; pump();
+  }
+}
+function play() { return playMacro(curName, Math.max(1, Math.min(999, +$("mrep").value || 1)), true); }
+function stopPlay() { stopFlag = true; stopTyping(); }
+function markStep(i) { document.querySelectorAll(".step").forEach((el, j) => el.classList.toggle("cur", j === i)); }
+
+// ---- editor ----
+function field(type, value, on, attrs = {}) {
+  const el = document.createElement(type === "select" ? "select" : "input");
+  if (type !== "select") el.type = type;
+  const { options, ...rest } = attrs;
+  Object.assign(el, rest);
+  if (type === "select") for (const [v, label] of Object.entries(options)) { const o = new Option(label, v); el.add(o); }
+  el.value = value;
+  el.addEventListener("change", () => { on(type === "number" ? +el.value : el.value); save(); });
+  return el;
+}
+function renderSteps() {
+  const box = $("steps"); box.textContent = "";
+  steps().forEach((s, i) => {
+    const row = document.createElement("div"); row.className = "step";
+    const num = document.createElement("span"); num.className = "num"; num.textContent = i + 1;
+    const kind = document.createElement("span"); kind.className = "kind"; kind.textContent = KIND[s.t] || s.t;
+    const body = document.createElement("div"); body.className = "body";
+    const btnOpts = { options: BTN };
+    switch (s.t) {
+      case "text": body.append(field("text", s.s, (v) => s.s = v, { placeholder: "Text to type", autocapitalize: "off", autocorrect: "off", spellcheck: false })); break;
+      case "key": {
+        const f = field("text", s.k, (v) => { s.k = v; f.style.borderColor = parseKey(v) ? "" : "var(--bad)"; }, { placeholder: "e.g. CTRL c", autocapitalize: "off", autocorrect: "off", spellcheck: false });
+        if (!parseKey(s.k)) f.style.borderColor = "var(--bad)";
+        const r = field("number", s.n || 1, (v) => { s.n = Math.max(1, Math.min(999, Math.round(v) || 1)); r.value = s.n; },
+          { inputMode: "numeric", min: 1, max: 999, title: "Times to press" });
+        r.style.flex = "0 0 56px";
+        body.append(f, "×", r); break;
+      }
+      case "click": case "press": case "release": body.append(field("select", s.b, (v) => s.b = +v, btnOpts)); break;
+      case "move":
+        body.append("x", field("number", s.x, (v) => s.x = v, { inputMode: "numeric" }), "y", field("number", s.y, (v) => s.y = v, { inputMode: "numeric" })); break;
+      case "corner": { const n = document.createElement("span"); n.className = "mut"; n.textContent = "pointer to top-left"; body.append(n); break; }
+      case "scroll": body.append(field("number", s.n, (v) => s.n = v, { inputMode: "numeric" }), "(− = down)"); break;
+      case "media": body.append(field("select", s.c, (v) => s.c = +v, { options: MEDIA })); break;
+      case "delay": body.append(field("number", s.ms, (v) => s.ms = v, { inputMode: "numeric", min: 0 }), "ms"); break;
+    }
+    const ctl = document.createElement("div"); ctl.className = "ctl";
+    const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.onclick = () => { fn(); save(); renderSteps(); }; ctl.append(b); };
+    const list = steps();
+    mk("▲", () => { if (i > 0) [list[i - 1], list[i]] = [list[i], list[i - 1]]; });
+    mk("▼", () => { if (i < list.length - 1) [list[i + 1], list[i]] = [list[i], list[i + 1]]; });
+    mk("✕", () => list.splice(i, 1));
+    row.append(num, kind, body, ctl); box.append(row);
+  });
+  if (!steps().length) { const e = document.createElement("div"); e.className = "mtop mut"; e.style.paddingBottom = "8px"; e.textContent = "No steps yet. Tap Record, or add steps one at a time below."; box.append(e); }
+}
+function renderList() {
+  const sel = $("mlist"); sel.textContent = "";
+  for (const n of Object.keys(macros)) sel.add(new Option(n, n));
+  sel.value = curName;
+}
+function openPanel() { renderList(); renderSteps(); showBar(); $("mpanel").classList.add("open"); }
+
+const NEW_STEP = { text: () => ({ t: "text", s: "" }), key: () => ({ t: "key", k: "ENTER" }), click: () => ({ t: "click", b: 1 }),
+  move: () => ({ t: "move", x: 100, y: 0 }), corner: () => ({ t: "corner" }), press: () => ({ t: "press", b: 1 }),
+  release: () => ({ t: "release", b: 1 }), scroll: () => ({ t: "scroll", n: -3 }), media: () => ({ t: "media", c: 205 }),
+  delay: () => ({ t: "delay", ms: 500 }) };
+
+$("macroBtn").onclick = openPanel;
+$("mclose").onclick = () => $("mpanel").classList.remove("open");
+$("mlist").onchange = (e) => { curName = e.target.value; save(); renderSteps(); };
+$("mnew").onclick = () => {
+  let n = 1; while (macros["Macro " + n]) n++;
+  const name = (prompt("Name for the new macro:", "Macro " + n) || "").trim();
+  if (!name) return;
+  if (!macros[name]) macros[name] = [];
+  curName = name; save(); openPanel();
+};
+$("mren").onclick = () => {
+  const name = (prompt("Rename macro:", curName) || "").trim();
+  if (!name || name === curName) return;
+  if (macros[name]) { alert("A macro with that name already exists."); return; }
+  macros[name] = macros[curName]; delete macros[curName];
+  for (const g of Object.values(groups)) { const i = g.indexOf(curName); if (i >= 0) g[i] = name; }
+  curName = name; save(); saveGroups(); renderList();
+};
+$("mdel").onclick = () => {
+  if (!confirm(`Delete "${curName}"?`)) return;
+  delete macros[curName];
+  for (const k of Object.keys(groups)) groups[k] = groups[k].filter((n) => n !== curName);
+  saveGroups();
+  if (!Object.keys(macros).length) macros["Macro 1"] = [];
+  curName = Object.keys(macros)[0]; save(); openPanel();
+};
+$("mclear").onclick = () => { if (steps().length && confirm("Remove every step from this macro?")) { macros[curName] = []; save(); renderSteps(); } };
+$("addStep").onclick = () => { steps().push(NEW_STEP[$("addType").value]()); save(); renderSteps(); $("steps").lastChild.scrollIntoView?.({ block: "nearest" }); };
+$("recBtn").onclick = () => recording ? stopRec() : startRec();
+$("recPause").onclick = togglePause;
+$("recStop").onclick = () => { if (recording) stopRec(); else stopPlay(); };
+$("playBtn").onclick = play;
+
+// ================= remote: macro groups =================
+// A group is an ordered list of macro names. "All macros" is built in.
+const ALL = "All macros";
+let groups = {}, curGroup = ALL;
+try { groups = JSON.parse(localStorage.getItem("phonekb.groups") || "{}") || {}; curGroup = localStorage.getItem("phonekb.group") || ALL; } catch (e) {}
+function saveGroups() {
+  try { localStorage.setItem("phonekb.groups", JSON.stringify(groups)); localStorage.setItem("phonekb.group", curGroup); } catch (e) {}
+}
+function groupMacros(g) {
+  if (g === ALL || !groups[g]) return Object.keys(macros);
+  return groups[g].filter((n) => macros[n]);
+}
+function renderGroupList() {
+  if (curGroup !== ALL && !groups[curGroup]) curGroup = ALL;
+  const sel = $("rgroup"); sel.textContent = "";
+  sel.add(new Option(ALL, ALL));
+  for (const g of Object.keys(groups)) sel.add(new Option(g, g));
+  sel.value = curGroup;
+  $("gren").disabled = $("gdel").disabled = curGroup === ALL;
+}
+function renderRemote() {
+  if (!$("rpanel").classList.contains("open")) return;
+  $("rdot").classList.toggle("on", connected);
+  const grid = $("rgrid"); grid.textContent = "";
+  const names = groupMacros(curGroup).filter((n) => macros[n].length);
+  for (const name of names) {
+    const b = document.createElement("button");
+    b.className = "mbtn"; b.textContent = name;
+    if (playingName === name) { b.classList.add("playing"); b.textContent = "■ " + name; }
+    else if (playing || recording) b.disabled = true;
+    b.onclick = () => playMacro(name, 1);   // tapping the playing button stops it
+    grid.append(b);
+  }
+  if (!names.length) {
+    const e = document.createElement("div"); e.className = "empty";
+    e.textContent = curGroup === ALL
+      ? "No macros with steps yet. Make some in Macros, then come back."
+      : "This group is empty. Tap Edit to choose which macros go in it.";
+    grid.append(e);
+  }
+}
+function renderGroupEditor() {
+  const box = $("gitems"); box.textContent = "";
+  const isAll = curGroup === ALL;
+  if (isAll) {
+    const e = document.createElement("div"); e.className = "mut"; e.style.padding = "8px 12px";
+    e.textContent = "\"All macros\" always shows every macro. Tap New group to make your own set of buttons.";
+    box.append(e); return;
+  }
+  const members = groups[curGroup];
+  // members first (in button order), then the rest alphabetically
+  const others = Object.keys(macros).filter((n) => !members.includes(n)).sort((a, b) => a.localeCompare(b));
+  for (const name of [...members.filter((n) => macros[n]), ...others]) {
+    const inG = members.includes(name);
+    const row = document.createElement("div"); row.className = "gitem";
+    const lab = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = inG;
+    cb.onchange = () => {
+      if (cb.checked) members.push(name); else members.splice(members.indexOf(name), 1);
+      saveGroups(); renderGroupEditor();
+    };
+    lab.append(cb, name);
+    row.append(lab);
+    if (inG) {
+      const i = members.indexOf(name);
+      const mk = (t, fn) => { const b = document.createElement("button"); b.textContent = t; b.onclick = () => { fn(); saveGroups(); renderGroupEditor(); }; row.append(b); };
+      mk("▲", () => { if (i > 0) [members[i - 1], members[i]] = [members[i], members[i - 1]]; });
+      mk("▼", () => { if (i < members.length - 1) [members[i + 1], members[i]] = [members[i], members[i + 1]]; });
+    }
+    box.append(row);
+  }
+  if (!Object.keys(macros).length) box.append("No macros yet.");
+}
+function setEditing(on) {
+  $("rpanel").classList.toggle("editing", on);
+  $("rEditBtn").classList.toggle("on", on);
+  $("rEditBtn").textContent = on ? "Done editing" : "Edit";
+  if (on) renderGroupEditor(); else renderRemote();
+}
+function openRemote() {
+  $("mpanel").classList.remove("open");
+  $("rpanel").classList.add("open");
+  renderGroupList(); setEditing(false); renderRemote();
+}
+$("remoteBtn").onclick = openRemote;
+$("rclose").onclick = () => $("rpanel").classList.remove("open");
+$("rgroup").onchange = (e) => { curGroup = e.target.value; saveGroups(); renderGroupList(); $("rpanel").classList.contains("editing") ? renderGroupEditor() : renderRemote(); };
+$("rEditBtn").onclick = () => setEditing(!$("rpanel").classList.contains("editing"));
+$("gnew").onclick = () => {
+  let n = 1; while (groups["Group " + n]) n++;
+  const name = (prompt("Name for the new group:", "Group " + n) || "").trim();
+  if (!name) return;
+  if (name === ALL || groups[name]) { alert("A group with that name already exists."); return; }
+  groups[name] = []; curGroup = name; saveGroups(); renderGroupList(); setEditing(true);
+};
+$("gren").onclick = () => {
+  if (curGroup === ALL) return;
+  const name = (prompt("Rename group:", curGroup) || "").trim();
+  if (!name || name === curGroup) return;
+  if (name === ALL || groups[name]) { alert("A group with that name already exists."); return; }
+  const next = {};
+  for (const [k, v] of Object.entries(groups)) next[k === curGroup ? name : k] = v;  // keep order
+  groups = next; curGroup = name; saveGroups(); renderGroupList();
+};
+$("gdel").onclick = () => {
+  if (curGroup === ALL) return;
+  if (!confirm(`Delete the group "${curGroup}"? The macros themselves are kept.`)) return;
+  delete groups[curGroup]; curGroup = ALL; saveGroups(); renderGroupList(); renderGroupEditor();
+};
+
+// ================= import / export =================
+// File format: { "app": "phonekb", "version": 1, "macros": { name: [steps] }, "groups": { name: [macro names] } }
+function downloadJson(obj, filename) {
+  const text = JSON.stringify(obj, null, 1);
+  const file = new File([text], filename, { type: "application/json" });
+  // Phones: offer the share sheet (Drive, email, Messages…) when available, otherwise download
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file], title: filename }).catch((e) => { if (e.name !== "AbortError") saveFile(file); });
+  } else saveFile(file);
+}
+function saveFile(file) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(file); a.download = file.name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function stamp() { const d = new Date(), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; }
+// Turn whatever the user typed into a safe file name ending in .json
+function cleanFileName(n, fallback) {
+  n = String(n || "").replace(/\.json$/i, "").replace(/[\\/:*?"<>|\x00-\x1f]+/g, "-").replace(/^[\s.]+|[\s.]+$/g, "").slice(0, 80);
+  return (n || fallback) + ".json";
+}
+function safeName(n) { return n.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "macro"; }
+
+$("mexpAll").onclick = () => {
+  const withSteps = Object.keys(macros).filter((n) => macros[n].length);
+  if (!withSteps.length) { alert("There are no macros with steps to export yet."); return; }
+  const def = `phonekb-macros-${stamp()}`;
+  const name = prompt("Name the export file:", def);
+  if (name === null) return;                      // cancelled
+  downloadJson({ app: "phonekb", version: 1, macros, groups }, cleanFileName(name, def));
+};
+// ---- export selected: pick macros (and optionally Remote groups) ----
+let xMacros = new Set(), xGroups = new Set(), xNameEdited = false;
+function suggestedName() {
+  const only = [...xMacros];
+  if (only.length === 1 && !xGroups.size) return `phonekb-${safeName(only[0])}`;
+  if (xGroups.size === 1 && only.length) return `phonekb-${safeName([...xGroups][0])}`;
+  return `phonekb-macros-${stamp()}`;
+}
+$("xfile").addEventListener("input", () => { xNameEdited = true; });
+function openExportPicker() {
+  const names = Object.keys(macros).filter((n) => macros[n].length);
+  if (!names.length) { alert("There are no macros with steps to export yet."); return; }
+  xMacros = new Set(macros[curName] && macros[curName].length ? [curName] : []);
+  xGroups = new Set();
+  xNameEdited = false;
+  renderExportPicker();
+  $("xpanel").classList.add("open");
+}
+function renderExportPicker() {
+  const box = $("xlist"); box.textContent = "";
+  const names = Object.keys(macros).filter((n) => macros[n].length);
+  const row = (label, checked, onchange, note) => {
+    const r = document.createElement("div"); r.className = "gitem";
+    const l = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = checked; cb.onchange = () => onchange(cb.checked);
+    l.append(cb, label);
+    if (note) { const sm = document.createElement("small"); sm.textContent = note; l.append(sm); }
+    r.append(l); box.append(r);
+  };
+  const gnames = Object.keys(groups).filter((g) => groups[g].some((n) => macros[n] && macros[n].length));
+  if (gnames.length) {
+    const h = document.createElement("h4"); h.textContent = "Remote groups"; box.append(h);
+    for (const g of gnames) {
+      const members = groups[g].filter((n) => macros[n] && macros[n].length);
+      row(g, xGroups.has(g), (on) => {
+        if (on) { xGroups.add(g); members.forEach((n) => xMacros.add(n)); }
+        else { xGroups.delete(g); members.forEach((n) => xMacros.delete(n)); }
+        renderExportPicker();
+      }, `${members.length} macro${members.length > 1 ? "s" : ""}`);
+    }
+  }
+  const h = document.createElement("h4"); h.textContent = "Macros"; box.append(h);
+  for (const n of names) {
+    const st = macros[n];
+    row(n, xMacros.has(n), (on) => { on ? xMacros.add(n) : xMacros.delete(n); updateExportButton(); }, `${st.length} step${st.length > 1 ? "s" : ""}`);
+  }
+  updateExportButton();
+}
+function updateExportButton() {
+  const n = xMacros.size, g = [...xGroups].length;
+  $("xgo").disabled = n === 0;
+  if (!xNameEdited) $("xfile").value = suggestedName();
+  $("xgo").textContent = n === 0 ? "Select macros to export"
+    : `Export ${n} macro${n > 1 ? "s" : ""}` + (g ? ` + ${g} group${g > 1 ? "s" : ""}` : "");
+}
+$("mexpSel").onclick = openExportPicker;
+$("xcancel").onclick = () => $("xpanel").classList.remove("open");
+$("xall").onclick = () => {
+  Object.keys(macros).filter((n) => macros[n].length).forEach((n) => xMacros.add(n));
+  Object.keys(groups).forEach((g) => xGroups.add(g));
+  renderExportPicker();
+};
+$("xnone").onclick = () => { xMacros.clear(); xGroups.clear(); renderExportPicker(); };
+$("xgo").onclick = () => {
+  if (!xMacros.size) return;
+  const outM = {}, outG = {};
+  for (const n of Object.keys(macros)) if (xMacros.has(n)) outM[n] = macros[n];
+  for (const g of xGroups) { if (groups[g]) { const m = groups[g].filter((n) => xMacros.has(n)); if (m.length) outG[g] = m; } }
+  const fname = cleanFileName($("xfile").value, suggestedName());
+  $("xpanel").classList.remove("open");
+  downloadJson({ app: "phonekb", version: 1, macros: outM, groups: outG }, fname);
+};
+$("mimp").onclick = () => { $("mimpFile").value = ""; $("mimpFile").click(); };
+$("mimpFile").onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try { importData(JSON.parse(await f.text())); }
+  catch (err) { alert("That file couldn't be imported. Make sure it's a file exported from Phone Keyboard.\n\n(" + err.message + ")"); }
+};
+
+function cleanSteps(list) {
+  if (!Array.isArray(list)) return null;
+  return list.filter((st) => st && typeof st === "object" && KIND[st.t]).map((st) => ({ ...st }));
+}
+function importData(data) {
+  if (!data || typeof data !== "object" || typeof data.macros !== "object" || Array.isArray(data.macros)) throw new Error("no macros found in file");
+  const incoming = {};
+  for (const [name, list] of Object.entries(data.macros)) { const c = cleanSteps(list); if (c && String(name).trim()) incoming[String(name).trim()] = c; }
+  const names = Object.keys(incoming);
+  if (!names.length) throw new Error("no macros found in file");
+
+  // Name clashes: replace, or keep both by renaming the imported copy
+  const clashes = names.filter((n) => macros[n] && macros[n].length);
+  let replace = true;
+  if (clashes.length) {
+    replace = confirm(`${clashes.length} macro${clashes.length > 1 ? "s" : ""} with the same name already exist${clashes.length > 1 ? "" : "s"} here:\n${clashes.slice(0, 8).join(", ")}${clashes.length > 8 ? "…" : ""}\n\nOK = replace them with the imported version\nCancel = keep both (imported copies get a number)`);
+  }
+  const rename = {};
+  for (const n of names) {
+    let target = n;
+    if (!replace && macros[n] && macros[n].length) { let i = 2; while (macros[`${n} (${i})`]) i++; target = `${n} (${i})`; }
+    rename[n] = target;
+    macros[target] = incoming[n];
+  }
+  // drop the empty placeholder macro if it's the only thing left over
+  if (macros["Macro 1"] && !macros["Macro 1"].length && !incoming["Macro 1"]) {
+    delete macros["Macro 1"];
+    for (const k of Object.keys(groups)) groups[k] = groups[k].filter((n) => n !== "Macro 1");
+  }
+
+  // Groups: merge members into same-named groups
+  let gCount = 0;
+  if (data.groups && typeof data.groups === "object" && !Array.isArray(data.groups)) {
+    for (const [g, members] of Object.entries(data.groups)) {
+      if (!Array.isArray(members) || !String(g).trim() || g === ALL) continue;
+      const list = groups[g] || (groups[g] = []);
+      for (const m of members) { const t = rename[m] || (macros[m] ? m : null); if (t && !list.includes(t)) list.push(t); }
+      gCount++;
+    }
+  }
+  if (!macros[curName]) curName = rename[names[0]];
+  save(); saveGroups(); openPanel();
+  alert(`Imported ${names.length} macro${names.length > 1 ? "s" : ""}` + (gCount ? ` and ${gCount} group${gCount > 1 ? "s" : ""}` : "") + ".");
+}
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+// Offline support: cache the page so it opens with no internet
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+window.addEventListener("pagehide", () => { if (connected) device.gatt.disconnect(); });
+
+// ---------------- write with Claude ----------------
+// Photos of a task (camera or gallery) + the saved reference images + the saved
+// instruction go to Claude; its answer lands in the Send text box, which is stored
+// on the board as usual: Caps Lock on the PC types it, pauses and resumes.
+// The API key and references stay on this phone (localStorage / IndexedDB).
+const CLAUDE_MODEL = "claude-opus-5-5";
+const SDK_URL = "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.7.0/+esm";
+const DEFAULT_INSTR = "okay dieser chat wird dafür da sein um english texte generieren zu lassen. ich habe dir alle references für context hochgeladen damit du weißt. der ablauf wird so sein, ich werde dir ein bild von einer aufgabe schicken oder direkt auch 2 oder 3 bilder wo man 2 oder einen text schreiben muss und du wirst mir als antwort einfach nur den text oder die texte nacheinander geben ohne irgendwas anderes also wirklich nur die texte";
+const TASK_EDGE = 2576, REF_EDGE = 1568;   // long edge in px: tasks full detail, references cheaper
+// Claude Opus 5.5, $ per million tokens: input, cache write (5 min), cache read, output
+const PRICE = { in: 4, write: 5, read: 0.2, out: 20 };
+let Anthropic = null, claudeTasks = [], claudeRefs = [], claudeBusy = null;
+
+function cMsg(text, kind = "") { const el = $("cMsg"); el.textContent = text || ""; el.className = "cmsg " + kind; }
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+// Shrink a photo to JPEG (long edge max px) and return {b64, url}
+async function shrinkImage(file, maxEdge) {
+  const src = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Couldn't read " + (file.name || "the photo"))); i.src = src; });
+    const s = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * s)), h = Math.max(1, Math.round(img.naturalHeight * s));
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    const cx = cv.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, w, h); cx.drawImage(img, 0, 0, w, h);
+    const url = cv.toDataURL("image/jpeg", 0.88);
+    return { b64: url.slice(url.indexOf(",") + 1), url };
+  } finally { URL.revokeObjectURL(src); }
+}
+
+function renderThumbs(el, list, onRemove) {
+  el.innerHTML = "";
+  list.forEach((it, i) => {
+    const d = document.createElement("div"), im = document.createElement("img"), x = document.createElement("button");
+    im.src = it.url; x.textContent = "×"; x.onclick = () => onRemove(i);
+    d.append(im, x); el.appendChild(d);
+  });
+}
+
+// ---- task photos
+function renderTasks() {
+  renderThumbs($("cTasks"), claudeTasks, (i) => { claudeTasks.splice(i, 1); renderTasks(); });
+  $("cGo").disabled = !!claudeBusy;
+  $("cGo").textContent = claudeBusy ? "Writing…" : "Write text";
+}
+async function addTasks(files) {
+  for (const f of files) {
+    try { claudeTasks.push(await shrinkImage(f, TASK_EDGE)); } catch (e) { cMsg(e.message, "bad"); }
+  }
+  renderTasks();
+  if (claudeTasks.length) cMsg(claudeTasks.length + (claudeTasks.length === 1 ? " photo" : " photos") + " of the task. Add more or tap Write text.");
+}
+$("cCam").onclick = () => $("cCamIn").click();
+$("cLib").onclick = () => $("cLibIn").click();
+$("cCamIn").onchange = async (e) => { await addTasks([...e.target.files]); e.target.value = ""; };
+$("cLibIn").onchange = async (e) => { await addTasks([...e.target.files]); e.target.value = ""; };
+$("cClear").onclick = () => { claudeTasks = []; renderTasks(); cMsg(""); };
+
+// ---- references (IndexedDB, on this phone)
+function refDb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("phonekb-claude", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("refs", { keyPath: "id", autoIncrement: true });
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+}
+async function refTx(mode, fn) {
+  const db = await refDb();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("refs", mode), st = tx.objectStore("refs"), out = fn(st);
+    tx.oncomplete = () => { db.close(); res(out && out.result); }; tx.onerror = () => { db.close(); rej(tx.error); };
+  });
+}
+async function loadRefs() {
+  try { claudeRefs = (await refTx("readonly", (st) => st.getAll())) || []; } catch (e) { claudeRefs = []; }
+  claudeRefs.forEach((r) => { r.url = "data:image/jpeg;base64," + r.b64; });
+  renderRefs();
+}
+function renderRefs() {
+  $("cRefCount").textContent = claudeRefs.length ? claudeRefs.length + (claudeRefs.length === 1 ? " image" : " images") : "none";
+  renderThumbs($("cRefs"), claudeRefs, async (i) => {
+    try { await refTx("readwrite", (st) => st.delete(claudeRefs[i].id)); } catch (e) {}
+    await loadRefs();
+  });
+}
+$("cRefAdd").onclick = () => $("cRefIn").click();
+$("cRefIn").onchange = async (e) => {
+  const files = [...e.target.files]; e.target.value = "";
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) {}
+  let n = 0;
+  for (const f of files) {
+    cMsg(`Saving references… ${++n}/${files.length}`);
+    try { const { b64 } = await shrinkImage(f, REF_EDGE); await refTx("readwrite", (st) => st.add({ name: f.name || "", b64 })); }
+    catch (err) { cMsg("Couldn't save a reference: " + err.message, "bad"); }
+  }
+  await loadRefs();
+  cMsg(`${claudeRefs.length} references saved on this phone.`, "good");
+};
+$("cRefClear").onclick = async () => {
+  if (!claudeRefs.length || !confirm(`Remove all ${claudeRefs.length} references from this phone?`)) return;
+  try { await refTx("readwrite", (st) => st.clear()); } catch (e) {}
+  await loadRefs();
+};
+
+// ---- settings
+(function () {
+  $("cKey").value = lsGet("phonekb.claudeKey", "");
+  $("cInstr").value = lsGet("phonekb.claudeInstr", DEFAULT_INSTR);
+  $("cEffort").value = lsGet("phonekb.claudeEffort", "high");
+  $("cKey").addEventListener("change", () => lsSet("phonekb.claudeKey", $("cKey").value.trim()));
+  $("cInstr").addEventListener("change", () => lsSet("phonekb.claudeInstr", $("cInstr").value.trim() ? $("cInstr").value : DEFAULT_INSTR));
+  $("cEffort").addEventListener("change", () => lsSet("phonekb.claudeEffort", $("cEffort").value));
+})();
+
+// ---- the text box (same as Send text's box: edits are stored on the board again)
+$("cOut").addEventListener("input", () => { $("bulk").value = $("cOut").value; $("bulk").dispatchEvent(new Event("input")); });
+function setBoxText(text) {
+  $("bulk").value = text; $("cOut").value = text;
+  $("bulk").dispatchEvent(new Event("input"));   // a new text: store it on the board (Caps Lock types it)
+  scheduleStore(50);
+}
+
+// ---- ask Claude
+async function writeWithClaude() {
+  if (claudeBusy) return;
+  const key = $("cKey").value.trim();
+  if (!key) { $("cSet").open = true; cMsg("Enter your Anthropic API key in Claude settings first.", "bad"); return; }
+  if (!claudeTasks.length) { cMsg("Take or pick at least one photo of the task first.", "bad"); return; }
+  lsSet("phonekb.claudeKey", key);
+  const ctl = { abort: null, cancelled: false }; claudeBusy = ctl; renderTasks();
+  cMsg("Loading…");
+  try {
+    if (!Anthropic) Anthropic = (await import(SDK_URL)).default;
+    const client = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true, maxRetries: 2 });
+    const img = (b64) => ({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64 } });
+    const content = [];
+    if (claudeRefs.length) {
+      content.push({ type: "text", text: "References (Kontext):" });
+      claudeRefs.forEach((r) => content.push(img(r.b64)));
+      content[content.length - 1].cache_control = { type: "ephemeral" };   // same every time: cached, ~1/20 of the price
+    }
+    content.push({ type: "text", text: claudeTasks.length === 1 ? "Aufgabe:" : `Aufgabe (${claudeTasks.length} Bilder):` });
+    claudeTasks.forEach((t) => content.push(img(t.b64)));
+    const stream = client.beta.messages.stream({
+      model: CLAUDE_MODEL,
+      max_tokens: 32000,
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",   // if Opus declines, the API retries on a fallback model
+      output_config: { effort: $("cEffort").value || "high" },
+      system: $("cInstr").value.trim() || DEFAULT_INSTR,
+      messages: [{ role: "user", content }],
+    });
+    ctl.abort = () => stream.abort();
+    let written = "";
+    cMsg("Claude is thinking… keep this page open (about 20–60 s).");
+    stream.on("text", (d) => {
+      written += d;
+      const words = written.trim().split(/\s+/).length;
+      cMsg(`Claude is writing… ${words} words`); $("cOut").value = written;
+    });
+    const msg = await stream.finalMessage();
+    if (msg.stop_reason === "refusal") throw new Error("Claude declined this task" + (msg.stop_details && msg.stop_details.explanation ? ": " + msg.stop_details.explanation : "."));
+    const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+    if (!text) throw new Error("Claude sent no text back. Try again.");
+    setBoxText(text);
+    const u = msg.usage || {}, cost = ((u.input_tokens || 0) * PRICE.in + (u.cache_creation_input_tokens || 0) * PRICE.write +
+      (u.cache_read_input_tokens || 0) * PRICE.read + (u.output_tokens || 0) * PRICE.out) / 1e6;
+    const words = text.split(/\s+/).length;
+    cMsg(`Done: ${words} words (≈ $${cost.toFixed(2)})` + (msg.stop_reason === "max_tokens" ? " — cut off at the length limit!" : "") +
+      (connected ? ". Press Caps Lock on the PC to type it." : ". Connect to the board to store it."), msg.stop_reason === "max_tokens" ? "bad" : "good");
+  } catch (e) {
+    if (ctl.cancelled) { cMsg("Cancelled."); }
+    else if (Anthropic && e instanceof Anthropic.AuthenticationError) cMsg("The API key was rejected. Check it in Claude settings.", "bad");
+    else if (Anthropic && e instanceof Anthropic.PermissionDeniedError) cMsg("This API key isn't allowed to use " + CLAUDE_MODEL + ".", "bad");
+    else if (Anthropic && e instanceof Anthropic.RateLimitError) cMsg("Too many requests or no credit left on the API account. Wait a moment, or check billing.", "bad");
+    else if (Anthropic && e instanceof Anthropic.BadRequestError) cMsg("Claude couldn't take the request: " + e.message, "bad");
+    else if (Anthropic && e instanceof Anthropic.APIConnectionError) cMsg("No connection to Claude. Check the internet and try again.", "bad");
+    else if (Anthropic && e instanceof Anthropic.APIError) cMsg("Claude had a problem (" + (e.status || "error") + "). Try again.", "bad");
+    else cMsg(String((e && e.message) || e), "bad");
+  } finally {
+    claudeBusy = null; renderTasks();
+  }
+}
+$("cGo").onclick = writeWithClaude;
+$("cStop").onclick = () => {
+  if (claudeBusy) { claudeBusy.cancelled = true; if (claudeBusy.abort) claudeBusy.abort(); return; }
+  $("stopBulk").click();
+};
+$("cPause").onclick = togglePause;
+$("claudeBtn").onclick = () => {
+  $("cOut").value = $("bulk").value; showStoreInfo(); renderTasks();
+  $("cdot").classList.toggle("on", connected);
+  if (!$("cKey").value) $("cSet").open = true;
+  $("cpanel").classList.add("open");
+};
+$("cclose").onclick = () => $("cpanel").classList.remove("open");
+setInterval(() => { if ($("cpanel").classList.contains("open")) $("cdot").classList.toggle("on", connected); }, 1000);
+loadRefs();
+</script>
+</body>
+</html>
