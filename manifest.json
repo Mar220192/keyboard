@@ -1,5 +1,5 @@
 {
-  "name": "Phone Keyboard",
+  "name": "Phone Keyboard for Flipper",
   "short_name": "PhoneKB",
   "start_url": "./index.html",
   "scope": "./",

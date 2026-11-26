@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content">
 <meta name="theme-color" content="#111317">
-<title>Phone Keyboard</title>
+<title>Phone Keyboard for Flipper</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -129,8 +129,12 @@
   .csec .row { padding: 6px 0 0; }
   .thumbs { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
   .thumbs div { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; background: var(--panel); }
-  .thumbs.small div { width: 48px; height: 48px; }
+  .thumbs.small div { width: 56px; height: 56px; }
+  .thumbs.small button { width: 18px; height: 18px; line-height: 18px; font-size: 11px; }
   .thumbs img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumbs .file { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 22px 2px 2px;
+    font-size: 9px; line-height: 1.1; color: var(--muted); text-align: center; word-break: break-all; }
+  .thumbs .file b { font-size: 10px; color: var(--key-active); }
   .thumbs button { position: absolute; top: 2px; right: 2px; padding: 0; width: 22px; height: 22px; border-radius: 11px;
     background: rgba(0,0,0,.7); font-size: 13px; line-height: 22px; }
   #cGo { background: var(--key-active); color: #111; font-weight: 600; }
@@ -139,12 +143,23 @@
   .cmsg.bad { color: var(--bad); }
   .cmsg.good { color: var(--ok); }
   #cOut { height: 220px; margin-top: 6px; }
+  #cTaskText { height: 90px; margin-top: 6px; font-size: 16px; }
   #cSet { margin: 14px 8px 0; border-top: 1px solid #23262d; padding-top: 8px; }
   #cSet summary { color: var(--muted); font-size: 14px; padding: 6px 4px; }
   #cSet label { display: block; color: var(--muted); font-size: 13px; padding: 8px 4px 0; }
   #cSet input, #cSet select { font: inherit; font-size: 16px; width: 100%; margin-top: 4px; padding: 9px; border-radius: 8px;
     border: 1px solid #333843; background: var(--panel); color: var(--text); }
   #cInstr { height: 120px; margin-top: 4px; font-size: 14px; }
+  /* screen lock while Claude writes: nothing behind it can be tapped by accident */
+  #cLock { display: none; position: fixed; inset: 0; z-index: 30; background: rgba(10, 11, 14, .94);
+    flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: 24px; touch-action: none; }
+  #cLock.open { display: flex; }
+  #cLock .lk { font-size: 40px; }
+  #cLockMsg { color: var(--text); font-size: 16px; text-align: center; max-width: 320px; min-height: 44px; }
+  #cLockHold { position: relative; overflow: hidden; width: 230px; padding: 16px 0; border-radius: 12px; font-size: 15px; color: var(--muted); }
+  #cLockHold span { position: relative; }
+  #cLockHold i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #5a2323; transition: none; }
+  #cLockHold.holding i { width: 100%; transition: width 1.5s linear; }
 </style>
 </head>
 <body>
@@ -267,20 +282,27 @@
   <button id="moreBtn">⋯</button>
 </div>
 
+<div id="cLock">
+  <div class="lk">🔒</div>
+  <div id="cLockMsg"></div>
+  <button id="cLockHold"><i></i><span>Hold to cancel</span></button>
+</div>
+
 <div id="cpanel">
   <header><div class="rdot" id="cdot"></div><b style="flex:1">Write with Claude</b><button id="cclose" style="padding:8px 16px">Done</button></header>
   <div class="csec">
-    <h4>Task (photos)</h4>
+    <h4>Task (photos, text or both)</h4>
     <div class="row r2"><button id="cCam">📷 Camera</button><button id="cLib">🖼 Photos</button></div>
     <input id="cCamIn" type="file" accept="image/*" capture="environment" hidden>
     <input id="cLibIn" type="file" accept="image/*" multiple hidden>
     <div id="cTasks" class="thumbs"></div>
-    <div class="row r2"><button id="cGo">Write text</button><button id="cClear">Clear photos</button></div>
+    <textarea id="cTaskText" placeholder="Type or paste the task here (optional: alone or together with photos)"></textarea>
+    <div class="row r2"><button id="cGo">Write text</button><button id="cClear">Clear task</button></div>
     <div id="cMsg" class="cmsg"></div>
   </div>
   <div class="csec">
     <h4>Text to type</h4>
-    <textarea id="cOut" placeholder="Claude's text appears here (you can edit it). It's stored on the board: press Caps Lock on the PC to type it."></textarea>
+    <textarea id="cOut" placeholder="Claude's text appears here (you can edit it). It's stored on the Flipper: press Caps Lock on the PC to type it."></textarea>
     <div id="cStore" class="storeinfo"></div>
     <div class="row r2"><button id="cPause" class="pausebtn">Pause</button><button id="cStop">Stop</button></div>
   </div>
@@ -289,9 +311,9 @@
     <label>API key (stays on this phone)<input id="cKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…"></label>
     <label>Instruction<textarea id="cInstr"></textarea></label>
     <label>Effort<select id="cEffort"><option value="low">Low (fastest)</option><option value="medium">Medium</option><option value="high">High (best texts)</option></select></label>
-    <label>References (sent with every task): <span id="cRefCount">none</span></label>
+    <label>References (sent with every task; images, PDF, Word, PowerPoint, Excel, text…): <span id="cRefCount">none</span></label>
     <div class="row r2" style="padding: 6px 4px 0"><button id="cRefAdd">Add references</button><button id="cRefClear">Remove all</button></div>
-    <input id="cRefIn" type="file" accept="image/*" multiple hidden>
+    <input id="cRefIn" type="file" multiple hidden>
     <div id="cRefs" class="thumbs small" style="padding: 6px 4px 0"></div>
   </details>
 </div>
@@ -353,18 +375,18 @@
 
 <script>
 "use strict";
-// ---- Flipper serial GATT (same UUIDs as the board firmware) ----
+// ---- Flipper serial GATT (same UUIDs as the Flipper firmware) ----
 const SERVICE = "8fe5b3d5-2e7f-4a98-2a48-7acc60fe0000";
 const RX_CHAR = "19ed82ae-ed21-4c9d-4145-228e62fe0000"; // phone -> Flipper
 // No-PIN Flipper app: the page proves itself with a saved random secret instead of Bluetooth pairing
 const AUTH_CHAR = "19ed82ae-ed21-4c9d-4145-228e65fe0000";   // write 16-byte secret
 const STATUS_CHAR = "19ed82ae-ed21-4c9d-4145-228e66fe0000"; // read: 0 waiting, 1 ok, 2 rejected
 const INFO_CHAR = "19ed82ae-ed21-4c9d-4145-228e69fe0000";     // read: [0] = Flipper app protocol version
-const PROGRESS_CHAR = "19ed82ae-ed21-4c9d-4145-228e68fe0000"; // read/notify: uint32 LE bytes the board is done with
+const PROGRESS_CHAR = "19ed82ae-ed21-4c9d-4145-228e68fe0000"; // read/notify: uint32 LE bytes the Flipper is done with
 const CONFIG_CHAR = "19ed82ae-ed21-4c9d-4145-228e67fe0000"; // write: [0..1] ms pause per letter, [2] bit0 stop / bit1 paused, [3] layout (0 US, 1 DE)
 
 // Random secret for this browser, created once and kept in localStorage.
-// The board remembers the first secret it receives (hold Left on the board to reset).
+// The Flipper remembers the first secret it receives (hold Left on the Flipper to reset).
 function getSecret() {
   let hex = null;
   try { hex = localStorage.getItem("phonekb.secret"); } catch (e) {}
@@ -404,7 +426,7 @@ async function connect() {
   try {
     if (!device) {
       device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: "PhoneKB ESP32" }],
+        filters: [{ namePrefix: "PhoneKB" }],
         optionalServices: [SERVICE],
       });
       device.addEventListener("gattserverdisconnected", onDisconnected);
@@ -432,7 +454,7 @@ async function openGatt() {
       catch (e) {
         const pinProblem = /^(Pairing failed|Wrong key)/.test(e.message);
         if (pinProblem || !wantConnected) throw e;
-        if (attempt >= 4) throw new Error("Couldn't connect after 4 tries. Make sure the board is plugged in (its light is on) and nothing else is connected to it, then tap Connect again. (" + e.message + ")");
+        if (attempt >= 4) throw new Error("Couldn't connect after 4 tries. Make sure Phone Keyboard is open on the Flipper and nothing else is connected to it, then tap Connect again. (" + e.message + ")");
         try { device.gatt.disconnect(); } catch (_) {}
         setStatus(`Connecting… (retry ${attempt})`, false);
         await sleep(600 * attempt);
@@ -471,10 +493,10 @@ async function openGattOnce() {
       if (st === 0) await sleep(100);
     }
     if (st === 2) throw new Error(freshConnect
-      ? "Wrong key: this board is linked to another phone or browser. To link this one, hold the BOOT button on the board for 3 seconds (three white blinks), then tap Connect again."
-      : "Wrong key: the board was reset or linked to another phone. Tap Connect to link this phone.");
+      ? "Wrong key: this Flipper is linked to another phone or browser. To link this one, hold Left on the Flipper, then tap Connect again."
+      : "Wrong key: the Flipper was reset or linked to another phone. Tap Connect to link this phone.");
     freshConnect = false;     // later reconnects of this session are automatic
-    if (st !== 1) throw new Error("The board didn't answer the key check");
+    if (st !== 1) throw new Error("The Flipper didn't answer the key check");
     // Letter delay setting (older Flipper builds don't have it: then typing speed is fixed)
     try { cfgChar = await svc.getCharacteristic(CONFIG_CHAR); } catch (_) { cfgChar = null; }
     delayDirty = true; stopPending = false;   // a Stop tapped while offline must not hit the next text
@@ -483,21 +505,21 @@ async function openGattOnce() {
     try { flipperVersion = (await (await svc.getCharacteristic(INFO_CHAR)).readValue()).getUint8(0); } catch (_) {}
     checkHumanSupport();
     // Store the box text if it never was (or sending it was cut off). If it was
-    // stored before and the board no longer has it, it was typed (or the board
+    // stored before and the Flipper no longer has it, it was typed (or the Flipper
     // app restarted): then only editing the text stores it again.
     const box = $("bulk").value;
     if (storing || (box && storedText === null && box !== typedText)) { storing = false; scheduleStore(300); }
   } else {
     // First write needs an encrypted, bonded link. Android shows its pairing
-    // dialog here: type the 6-digit PIN that appears on the board's screen.
-    setStatus("Pairing… enter the PIN shown on the board", false);
+    // dialog here: type the 6-digit PIN that appears on the Flipper's screen.
+    setStatus("Pairing… enter the PIN shown on the Flipper", false);
   }
   // Android can reject writes with "GATT operation already in progress" while
   // it is still bonding or discovering services, so keep retrying for ~30 s.
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
       await rxChar.writeValueWithResponse(new Uint8Array([OP.RELEASE]));
-      if (progressChar) sentBytes += 1;   // the board counts this byte too
+      if (progressChar) sentBytes += 1;   // the Flipper counts this byte too
       connected = true;
       keepAwake(true);
       break;
@@ -514,10 +536,10 @@ async function openGattOnce() {
 
 function onDisconnected() {
   connected = false; rxChar = null; cfgChar = null; progressChar = null;
-  capsPaused = false; lastStartCount = null;   // the board ends a Caps Lock pause on disconnect
-  queue = []; backlogMs = 0; textLog = [];   // the board drops its queue on disconnect, so don't resend stale input
+  capsPaused = false; lastStartCount = null;   // the Flipper ends a Caps Lock pause on disconnect
+  queue = []; backlogMs = 0; textLog = [];   // the Flipper drops its queue on disconnect, so don't resend stale input
   keepAwake(false);
-  setPaused(false, false);   // the board drops its queue on disconnect
+  setPaused(false, false);   // the Flipper drops its queue on disconnect
   leftLocked = false; $("lock").classList.remove("on"); $("lock").textContent = "Hold click"; // Flipper releases buttons on disconnect
   setStatus("Disconnected", false);
   $("connect").textContent = "Connect";
@@ -537,14 +559,14 @@ $("connect").onclick = () => {
 // Web Bluetooth allows one GATT op at a time, so everything is queued and
 // coalesced; mouse motion is accumulated between writes for smoothness.
 // Each queue entry is one whole packet, and a write only ever contains whole
-// packets: if the board has to drop a write, it never cuts a packet in half.
+// packets: if the Flipper has to drop a write, it never cuts a packet in half.
 let queue = [];             // packets waiting (each an array of bytes)
 let moveX = 0, moveY = 0, scrollAcc = 0;
 let pumping = false, pumpTimer = null;
 const MAX_WRITE = 180;
 const TEXT_CHUNK = 150;     // max bytes of text per packet (fits in one write)
 
-// The board types slowly with a long letter delay, and its buffer is only
+// The Flipper types slowly with a long letter delay, and its buffer is only
 // 2 KB. Estimate how much typing it still has queued (ms) and don't send more
 // while that's high. Paused time doesn't count.
 const BACKLOG_MAX_MS = 400;
@@ -561,15 +583,15 @@ let releasePending = false, resumePending = false;
 const RELEASE_OPS = [OP.UP, OP.KUP, OP.RELEASE];
 const STORE_OPS = [OP.STORE_BEGIN, OP.STORE_DATA, OP.STORE_END];
 const INPUT_OPS = [OP.TAP, OP.MOVE, OP.DOWN, OP.UP, OP.SCROLL, OP.RELEASE, OP.CONSUMER, OP.TEXT, OP.KDOWN, OP.KUP, OP.HTEXT];
-const BUSY_HINT = "The board is typing a text: the touchpad and keys are off until it's done (Stop ends it).";
+const BUSY_HINT = "The Flipper is typing a text: the touchpad and keys are off until it's done (Stop ends it).";
 
 function send(...bytes) {
-  // The stored text isn't input: it's saved on the board (held there while paused)
+  // The stored text isn't input: it's saved on the Flipper (held there while paused)
   if (STORE_OPS.includes(bytes[0])) { if (connected) { queue.push(bytes); pump(); } return; }
   if (paused || (flipperRunning && INPUT_OPS.includes(bytes[0]))) {
-    // New input is ignored while paused, or while the board types a saved text by
+    // New input is ignored while paused, or while the Flipper types a saved text by
     // itself (it would only be done afterwards). Letting go of a held button or key
-    // must still work: the board releases everything right away (config flag).
+    // must still work: the Flipper releases everything right away (config flag).
     if (RELEASE_OPS.includes(bytes[0]) && connected) { releasePending = true; pump(); }
     else if (!paused && connected) showErr(BUSY_HINT);
     return;
@@ -580,7 +602,7 @@ function send(...bytes) {
 }
 
 function flushMotion() {
-  if (flipperRunning || flipperBusyMs() > 50) {   // the board is busy typing: a late pointer jump is worse than none
+  if (flipperRunning || flipperBusyMs() > 50) {   // the Flipper is busy typing: a late pointer jump is worse than none
     moveX = moveY = scrollAcc = 0;
     return;
   }
@@ -606,16 +628,16 @@ let sentBytes = 0, flipperDone = 0, progBase = 0, progressAt = 0, progressNotify
 let textLog = [];           // text packets in flight: {end: sentBytes after it, letters}
 const progressListening = new WeakSet();
 
-// The board can also be paused from the PC with Caps Lock (PROGRESS byte 4, bit 0)
+// The Flipper can also be paused from the PC with Caps Lock (PROGRESS byte 4, bit 0)
 let capsPaused = false;   // (declared before readProgress uses it)
 function setCapsPaused(on) {
   if (on === capsPaused) return;
   capsPaused = on;
   updatePauseButtons();
-  if (on) setStatus("Paused on the board: press Caps Lock on the PC or tap Resume to continue", connected);
+  if (on) setStatus("Paused on the Flipper: press Caps Lock on the PC or tap Resume to continue", connected);
   else if (connected && !paused) setStatus("Connected: " + device.name, true);
 }
-// Pause/Resume buttons: "Resume" while the phone paused, or while the board holds a
+// Pause/Resume buttons: "Resume" while the phone paused, or while the Flipper holds a
 // pause (Caps Lock pause, or one it kept when the phone's connection dropped)
 function flipperHolds() { return capsPaused && flipperVersion >= 5; }   // older apps can't be resumed from here
 function updatePauseButtons() {
@@ -624,11 +646,11 @@ function updatePauseButtons() {
 }
 function togglePause() {
   if (!connected) return;
-  if (flipperHolds() && !paused) { resumePending = true; pump(); return; }   // release the board's pause
+  if (flipperHolds() && !paused) { resumePending = true; pump(); return; }   // release the Flipper's pause
   setPaused(!paused);
 }
 // PROGRESS byte 4: bit 0 paused with Caps Lock, bit 1 Caps Lock on, bits 4-7 count of
-// Caps Lock presses while the board was idle ("start typing the clipboard")
+// Caps Lock presses while the Flipper was idle ("start typing the clipboard")
 let capsOn = false, lastStartCount = null;
 let flipperRunning = false, runsAccepted = 0;   // "type now" text: being typed / how many accepted
 function readProgress(dv) {
@@ -637,7 +659,7 @@ function readProgress(dv) {
   setCapsPaused((st & 1) === 1);
   capsOn = (st & 2) === 2;
   setStoredReady((st & 4) === 4);
-  // The board finished the stored text's last packet but didn't keep it (SD card?)
+  // The Flipper finished the stored text's last packet but didn't keep it (SD card?)
   if (storing && storeEndAt && flipperDone >= storeEndAt && !(st & 4)) {
     storing = false; storeFailed = true; storedText = null; showStoreInfo();
   }
@@ -646,9 +668,9 @@ function readProgress(dv) {
   if (running !== flipperRunning) {
     flipperRunning = running;
     if (!running && $("err").textContent === BUSY_HINT) showErr("");
-    // (e.g. after reconnecting while the board was typing a text by itself)
+    // (e.g. after reconnecting while the Flipper was typing a text by itself)
     if (connected && !bulkRunning && !paused && !capsPaused)
-      setStatus(running ? "The board is typing a text (Stop works)…" : "Connected: " + device.name, true);
+      setStatus(running ? "The Flipper is typing a text (Stop works)…" : "Connected: " + device.name, true);
   }
   const count = st >> 4;
   if (dv.byteLength < 5) return;
@@ -669,7 +691,7 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 // clipboard, or, if the browser won't give it (or it's empty), the text in the
 // Send text box. Afterwards Caps Lock is put back the way it was before the press.
 async function capsStart() {
-  if (!$("capsClip").checked || !connected || bulkRunning || playing || flipperRunning) return;   // while typing, Caps Lock pauses (on the board)
+  if (!$("capsClip").checked || !connected || bulkRunning || playing || flipperRunning) return;   // while typing, Caps Lock pauses (on the Flipper)
   const capsBefore = !capsOn;   // this press flipped it
   let text = "", clipProblem = "";
   try {
@@ -697,9 +719,9 @@ async function capsStart() {
     showErr("");
   }
   // Typing happens with Caps Lock OFF (with it on, some PCs shift every key: , -> ;
-  // ß -> ?). The board switches it off itself before the first letter and checks
+  // ß -> ?). The Flipper switches it off itself before the first letter and checks
   // that the PC really did (the user's key may still be held down at this moment).
-  await typeBulk(text, capsBefore);   // the board restores Caps Lock to capsBefore at the end
+  await typeBulk(text, capsBefore);   // the Flipper restores Caps Lock to capsBefore at the end
   if (!jobsSupported()) restoreCaps(capsBefore);   // (older Flipper app: the page does it)
 }
 (function () {   // remember the "Caps Lock types clipboard" switch on this phone
@@ -708,7 +730,7 @@ async function capsStart() {
   el.addEventListener("change", () => { try { localStorage.setItem("phonekb.capsClip", el.checked ? "1" : "0"); } catch (e) {} });
 })();
 function restoreCaps(capsBefore) {
-  if (connected && capsOn !== capsBefore) send(OP.TAP, 0, 0x39);   // the board knows this press is its own
+  if (connected && capsOn !== capsBefore) send(OP.TAP, 0, 0x39);   // the Flipper knows this press is its own
 }
 function setProgress(raw) {
   flipperDone = Math.min(sentBytes, (raw - progBase) >>> 0);
@@ -719,7 +741,7 @@ function setProgress(raw) {
 function inFlight() { return progressChar ? Math.max(0, sentBytes - flipperDone) : 0; }
 function lettersInFlight() { let n = 0; for (const t of textLog) if (t.end > flipperDone) n += t.letters; return n; }
 function textMsInFlight() { let n = 0; for (const t of textLog) if (t.end > flipperDone) n += t.ms; return n; }
-// How long the board still needs for the text it has (ms)
+// How long the Flipper still needs for the text it has (ms)
 function flipperBusyMs() { return progressChar ? textMsInFlight() : backlog(); }
 
 async function setupProgress(svc) {
@@ -751,7 +773,7 @@ async function refreshProgress() {
   try { const v = await gatt(() => ch.readValue()); if (ch === progressChar) readProgress(v); } catch (_) {}
 }
 
-// Wait until the board has typed everything sent so far (or cancelled() / disconnect)
+// Wait until the Flipper has typed everything sent so far (or cancelled() / disconnect)
 async function waitFlipperDone(cancelled) {
   while (connected && progressChar && !cancelled() && (queue.length || pumping || inFlight() > 0)) {
     const stale = performance.now() - progressAt > (progressNotify ? 1000 : 200);
@@ -772,7 +794,7 @@ async function pump() {
         const d = typeDelay(), flags = (stopPending ? 1 : 0) | (paused ? 2 : 0) | (releasePending ? 4 : 0) | (resumePending ? 8 : 0) | (playing ? 16 : 0);
         delayDirty = false; stopPending = false; releasePending = false; resumePending = false;
         try {
-          // [3] = PC layout, so the board presses the right keys for y/z, umlauts, symbols
+          // [3] = PC layout, so the Flipper presses the right keys for y/z, umlauts, symbols
           // [4] bit 1 = typos, bits 2-3 = thinking pauses, [5] = WPM for humanized text
           await gatt(() => cfgChar.writeValueWithResponse(new Uint8Array([d & 0xFF, d >> 8, flags, GERMAN_PC ? 1 : 0,
                                                                           ($("typos").checked ? 2 : 0) | (thinkLevel() << 2), humanWpm()])));
@@ -780,7 +802,7 @@ async function pump() {
           delayDirty = true; if (flags & 1) stopPending = true; if (flags & 4) releasePending = true; if (flags & 8) resumePending = true;   // try again
           throw e;
         }
-        if (flags & 1) textLog = [];   // Stop: the board throws away what it had
+        if (flags & 1) textLog = [];   // Stop: the Flipper throws away what it had
       }
       flushMotion();
       if (!queue.length) {
@@ -792,7 +814,7 @@ async function pump() {
 
       if (progressChar) {
         if (inFlight() + queue[0].length > FLOW_MAX) {
-          // Wait for the board to make room. Notifications normally tell us; read it if they're late.
+          // Wait for the Flipper to make room. Notifications normally tell us; read it if they're late.
           if (!paused && performance.now() - progressAt > (progressNotify ? 500 : 150)) {
             await refreshProgress();
             if (inFlight() + queue[0].length <= FLOW_MAX) continue;
@@ -904,7 +926,7 @@ function charToKey(ch) {
   return map[c] || 0;
 }
 
-// Normalise phone-keyboard characters to what the board can type:
+// Normalise phone-keyboard characters to what the Flipper can type:
 // ASCII plus the German keys (umlauts, ß, §, °, ´, ², ³, €, µ).
 function toAscii(s) {
   return s.normalize("NFC").replace(/[‘’‚′]/g, "'").replace(/[“”„″]/g, '"')
@@ -922,7 +944,7 @@ function typeText(s, human = false) {
     for (const ch of s) { const k = charToKey(ch); if (k) tap(k); }
     return;
   }
-  // Sent as UTF-8; the board app decodes it (also across packet borders)
+  // Sent as UTF-8; the Flipper app decodes it (also across packet borders)
   const bytes = Array.from(new TextEncoder().encode(s));
   for (let i = 0; i < bytes.length; i += TEXT_CHUNK) {
     const part = bytes.slice(i, i + TEXT_CHUNK);
@@ -975,23 +997,23 @@ $("raw").onchange = (e) => {
 };
 
 // ---------------- letter delay ----------------
-// Pause the board makes after each typed letter. Higher = slower typing,
+// Pause the Flipper makes after each typed letter. Higher = slower typing,
 // for apps or PCs that drop letters. Remembered on this phone.
 let delayDirty = false, stopPending = false, paused = false;
 // Slider positions -> ms (fine steps at the fast end, big steps at the slow end)
 const DELAY_STEPS = [0, 1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50, 60, 75, 100, 125, 150, 200, 250,
                      300, 400, 500, 600, 750, 1000, 1250, 1500, 2000, 3000, 4000, 5000];
 function typeDelay() { return DELAY_STEPS[Math.max(0, Math.min(DELAY_STEPS.length - 1, Math.round(+$("typeDelay").value)))]; }
-// Time the board needs per letter: the delay plus the USB key press/release.
-// Kept on the safe side (8 ms), so the page never gets ahead of the board.
+// Time the Flipper needs per letter: the delay plus the USB key press/release.
+// Kept on the safe side (8 ms), so the page never gets ahead of the Flipper.
 function msPerLetter() { return (cfgChar ? typeDelay() : 2) + 8; }
-// Tell the board to stop typing and drop whatever it still has queued
+// Tell the Flipper to stop typing and drop whatever it still has queued
 function stopTyping() {
   queue = []; backlogMs = 0; setPaused(false, false); stopPending = true; pump();
   if (storing) { storing = false; storedText = null; scheduleStore(1500); }   // its packets were dropped: store it again
 }
 
-// Pause: the board holds everything it has queued (mid-text too) until Resume.
+// Pause: the Flipper holds everything it has queued (mid-text too) until Resume.
 // Sent text and macros wait as well, and new touchpad/keyboard input is ignored.
 function setPaused(on, tell = true) {
   paused = on;
@@ -1006,7 +1028,7 @@ async function runningWait(ms, cancelled) {
   while (left > 0 && !cancelled()) {
     await sleep(Math.min(50, Math.max(1, left)));
     const now = performance.now();
-    if (!paused && !capsPaused) left -= now - last;   // (Caps Lock pause on the board too)
+    if (!paused && !capsPaused) left -= now - last;   // (Caps Lock pause on the Flipper too)
     last = now;
   }
 }
@@ -1031,7 +1053,7 @@ async function whilePaused(cancelled) { while ((paused || capsPaused) && connect
 })();
 
 // ---------------- humanize ----------------
-// Typing like a person is done on the board (exact timing on USB): the page
+// Typing like a person is done on the Flipper (exact timing on USB): the page
 // only sends the speed and whether to make typos, and marks text as "humanized".
 let flipperVersion = 0;
 function thinkLevel() { return Math.max(0, Math.min(3, +$("think").value || 0)); }
@@ -1040,7 +1062,7 @@ function humanOn() { return $("human").checked && flipperVersion >= 2; }
 function humanMsPerLetter() { return 12000 / humanWpm() * 1.1; }   // average incl. pauses
 function checkHumanSupport() {
   if ($("human").checked && cfgChar && flipperVersion < 2)
-    showErr("Humanize needs a newer firmware on the board; text is typed normally until then.");
+    showErr("Humanize needs the newer Phone Keyboard app on the Flipper; text is typed normally until then.");
 }
 (function () {
   const human = $("human"), wpm = $("wpm"), out = $("wpmVal"), typos = $("typos"), think = $("think");
@@ -1059,7 +1081,7 @@ function checkHumanSupport() {
       localStorage.setItem("phonekb.typos", typos.checked ? "1" : "0");
       localStorage.setItem("phonekb.think", String(thinkLevel()));
     } catch (e) {}
-    delayDirty = true; pump();   // send speed/typos to the board
+    delayDirty = true; pump();   // send speed/typos to the Flipper
     if (connected) checkHumanSupport();
   };
   show();
@@ -1081,10 +1103,10 @@ $("sendBulk").onclick = () => {
 // Why a text can't be typed right now ("" = it can)
 function bulkBlocked(raw) {
   if (bulkRunning) return "Already typing: tap Stop first.";
-  if (!connected) return "Connect to the board first.";
-  if (flipperRunning) return "The board is still typing a text: wait, or tap Stop first.";
+  if (!connected) return "Connect to the Flipper first.";
+  if (flipperRunning) return "The Flipper is still typing a text: wait, or tap Stop first.";
   if (playing) return "A macro is playing: stop it first.";
-  if (!toAscii(raw)) return raw ? "Nothing to type: the board can't type these characters (emoji and the like)." : "There's no text to type.";
+  if (!toAscii(raw)) return raw ? "Nothing to type: the Flipper can't type these characters (emoji and the like)." : "There's no text to type.";
   return "";
 }
 // The box text is being typed: it must not be stored (again) for Caps Lock afterwards
@@ -1096,22 +1118,22 @@ function markBoxTyped() {
 }
 
 // ---------------- stored text ----------------
-// The text in the box is sent to the board in advance and saved there. Then a
-// Caps Lock press on the PC makes the board type it by itself, even with the
+// The text in the box is sent to the Flipper in advance and saved there. Then a
+// Caps Lock press on the PC makes the Flipper type it by itself, even with the
 // phone locked. It's used once; edit or paste new text to store it again.
 let storeTimer = null, storing = false, storedReady = false, storedText = null, typedText = null;
-let storeEndAt = 0, storeFailed = false;   // sentBytes after the last STORE_END; the board refused it
+let storeEndAt = 0, storeFailed = false;   // sentBytes after the last STORE_END; the Flipper refused it
 const STORE_MAX_CHARS = 20000;
 function storeAvailable() { return connected && flipperVersion >= 3 && $("capsClip").checked; }
 function showStoreInfo() {
   const el = $("storeInfo"), box = $("bulk").value;
   let text = "", ok = false;
   if (connected && flipperVersion >= 3 && $("capsClip").checked && box) {
-    if (typedText !== box && toAscii(box).length > STORE_MAX_CHARS) text = "Too long to store on the board (over 20,000 characters): tap Send text instead (keep the phone on).";
-    else if (storeFailed && typedText !== box) text = "The board couldn't keep the text, so Caps Lock can't type it: tap Send text instead.";
-    else if (storedReady && storedText === box) { text = "✓ Stored on the board: press Caps Lock on the PC to type it (you can lock the phone)"; ok = true; }
+    if (typedText !== box && toAscii(box).length > STORE_MAX_CHARS) text = "Too long to store on the Flipper (over 20,000 characters): tap Send text instead (keep the phone on).";
+    else if (storeFailed && typedText !== box) text = "The Flipper couldn't save the text (SD card?), so Caps Lock can't type it: tap Send text instead.";
+    else if (storedReady && storedText === box) { text = "✓ Stored on the Flipper: press Caps Lock on the PC to type it (you can lock the phone)"; ok = true; }
     else if (typedText === box) text = "Typed on the PC. Edit or paste new text to store it again.";
-    else text = "Sending the text to the board…";
+    else text = "Sending the text to the Flipper…";
   }
   el.textContent = text;
   el.classList.toggle("ready", ok);
@@ -1120,7 +1142,7 @@ function showStoreInfo() {
 }
 function setStoredReady(on) {
   if (on === storedReady) return;
-  if (!on && storedReady && !storing && storedText !== null) typedText = storedText;   // the board typed it (used once)
+  if (!on && storedReady && !storing && storedText !== null) typedText = storedText;   // the Flipper typed it (used once)
   if (on) storing = false;
   storedReady = on;
   showStoreInfo();
@@ -1153,7 +1175,7 @@ $("bulk").addEventListener("input", () => { typedText = null; scheduleStore(800)
 $("capsClip").addEventListener("change", () => scheduleStore(100));
 // Type whatever was last copied on the phone (the browser may ask to allow pasting)
 $("clipBulk").onclick = async () => {
-  if (!connected) { showErr("Connect to the board first."); return; }
+  if (!connected) { showErr("Connect to the Flipper first."); return; }
   let text = "";
   try { text = await navigator.clipboard.readText(); }
   catch (e) { showErr("This browser didn't allow reading the clipboard. Paste into the box and tap Send text instead."); return; }
@@ -1174,7 +1196,7 @@ async function typeBulk(raw, capsBefore = null) {
   if (recording && !playing) rec({ t: "text", s: toAscii(raw) });
   bulkRunning = true;
   try {
-    // Preferred: send the whole text first, the board types it by itself
+    // Preferred: send the whole text first, the Flipper types it by itself
     if (await typeOnFlipper(raw, capsBefore)) return;
     // Fallback (older Flipper app, very long text, Flipper couldn't save it): the old way
     jobBegin(capsBefore);
@@ -1182,9 +1204,9 @@ async function typeBulk(raw, capsBefore = null) {
   } finally { bulkRunning = false; }
 }
 
-// Send the whole text to the board, which saves it and types it by itself, so
+// Send the whole text to the Flipper, which saves it and types it by itself, so
 // locking the phone or losing the connection doesn't stop it any more.
-// Returns true if the board took it (or it was cancelled), false = stream it instead.
+// Returns true if the Flipper took it (or it was cancelled), false = stream it instead.
 const RUN_MAX_CHARS = 20000;
 async function typeOnFlipper(raw, capsBefore) {
   if (!connected || flipperVersion < 5 || !progressChar) return false;
@@ -1203,32 +1225,32 @@ async function typeOnFlipper(raw, capsBefore) {
   }
   send(OP.RUN_END, (humanOn() ? 1 : 0) | (capsBefore === null ? 0 : (2 | (capsBefore ? 4 : 0))));
   await waitFlipperDone(() => {
-    if (!paused) setStatus(`Sending the text to the board… ${Math.min(99, Math.round((flipperDone - doneBefore) / total * 100))}%`, connected);
+    if (!paused) setStatus(`Sending the text to the Flipper… ${Math.min(99, Math.round((flipperDone - doneBefore) / total * 100))}%`, connected);
     return bulkCancel;
   });
   if (bulkCancel) return true;
   if (!connected) {
-    showErr("The connection was lost while sending the text. If it had reached the board completely, the board types it anyway.");
+    showErr("The connection was lost while sending the text. If it had reached the Flipper completely, the Flipper types it anyway.");
     return true;
   }
-  if (runsAccepted === runsBefore) {   // the board couldn't save it (e.g. SD card)
-    showErr("The board couldn't keep the text, so it's sent while typing instead (the phone has to stay on).");
+  if (runsAccepted === runsBefore) {   // the Flipper couldn't save it (e.g. SD card)
+    showErr("The Flipper couldn't save the text, so it's sent while typing instead (the phone has to stay on).");
     return false;
   }
-  // Taken: the board types it alone. Wait until it's done (or Stop / connection lost).
+  // Taken: the Flipper types it alone. Wait until it's done (or Stop / connection lost).
   let lastRead = performance.now();
   while (connected && flipperRunning && !bulkCancel) {
-    if (!paused && !capsPaused) setStatus("Typing on the board… (you can lock the phone now)", true);
+    if (!paused && !capsPaused) setStatus("Typing on the Flipper… (you can lock the phone now)", true);
     await sleep(100);
     if (!progressNotify && performance.now() - lastRead > 1000) { lastRead = performance.now(); await refreshProgress(); }
   }
   if (!connected && !bulkCancel)
-    showErr("The connection was lost, but the board has the whole text and keeps typing it.");
+    showErr("The connection was lost, but the Flipper has the whole text and keeps typing it.");
   else if (connected && !paused) setStatus("Connected: " + device.name, true);
   return true;
 }
 
-// A "text job" (Send text, Clipboard, a macro's text): the board switches Caps Lock
+// A "text job" (Send text, Clipboard, a macro's text): the Flipper switches Caps Lock
 // off for typing (with it on, some PCs shift every key: , -> ;  ß -> ?) and puts it
 // back the way it was at the end, also after Stop or a lost connection.
 function jobsSupported() { return connected && flipperVersion >= 4; }
@@ -1243,7 +1265,7 @@ async function typeBulkNow(raw) {
   for (let i = 0; i < text.length && !bulkCancel; i += 100) {
     await whilePaused(() => bulkCancel);
     if (bulkCancel) break;
-    if (!connected) {   // don't silently drop the rest: the board threw away what it had queued
+    if (!connected) {   // don't silently drop the rest: the Flipper threw away what it had queued
       showErr(`The connection dropped while typing (about ${Math.max(0, i - lettersInFlight())} of ${text.length} characters typed). Send the rest again once it's back.`);
       return;
     }
@@ -1253,7 +1275,7 @@ async function typeBulkNow(raw) {
     show();
     if (progressChar) {
       // Hand the next part over as soon as this one has gone out; flow control
-      // keeps the board supplied, and little waits on the phone so Stop/Pause act at once
+      // keeps the Flipper supplied, and little waits on the phone so Stop/Pause act at once
       while (!bulkCancel && connected && (queue.length || pumping)) { await sleep(30); show(); }
     } else {
       // older Flipper app: don't send faster than it types (its buffer is 2 KB)
@@ -1261,7 +1283,7 @@ async function typeBulkNow(raw) {
     }
   }
   if (progressChar && !bulkCancel) await waitFlipperDone(() => { if (!paused && !capsPaused) setStatus(`Typing ${text.length - lettersInFlight()}/${text.length}…`, connected); return bulkCancel; });
-  if (!bulkCancel && !connected) showErr("The connection dropped before the board finished typing. Send the rest again once it's back.");
+  if (!bulkCancel && !connected) showErr("The connection dropped before the Flipper finished typing. Send the rest again once it's back.");
   if (connected && !paused) setStatus("Connected: " + device.name, true);
 }
 $("pauseBulk").onclick = togglePause;
@@ -1356,7 +1378,7 @@ pad.addEventListener("pointercancel", endPointer);
 
 // ================= macros: record, edit, play =================
 // A macro is a list of steps. Recording watches everything this page sends
-// to the board and turns it into editable steps, with Wait steps for pauses.
+// to the Flipper and turns it into editable steps, with Wait steps for pauses.
 const MODS = { CTRL: 1, CONTROL: 1, SHIFT: 2, ALT: 4, GUI: 8, WIN: 8, WINDOWS: 8, COMMAND: 8 };
 const KEYNAMES = { ENTER: 0x28, RETURN: 0x28, ESC: 0x29, ESCAPE: 0x29, BACKSPACE: 0x2A, TAB: 0x2B, SPACE: 0x2C,
   CAPSLOCK: 0x39, PRINTSCREEN: 0x46, SCROLLLOCK: 0x47, PAUSE: 0x48, INSERT: 0x49, HOME: 0x4A, PAGEUP: 0x4B,
@@ -1443,7 +1465,7 @@ function recordBytes(b) {
   }
 }
 function startRec() {
-  if (!connected) { showErr("Connect to the board first, so you can see what you're recording on the PC."); return; }
+  if (!connected) { showErr("Connect to the Flipper first, so you can see what you're recording on the PC."); return; }
   recording = true; lastRecT = null; clearMods();
   $("mpanel").classList.remove("open");
   showBar();
@@ -1478,7 +1500,7 @@ async function runStep(s) {
         if (stopFlag) break;
         if (!job) { jobBegin(); job = true; }   // Caps Lock off while this text is typed
         typeText(part, true); await waitIdle();
-        // let the board finish typing before the next step
+        // let the Flipper finish typing before the next step
         if (progressChar) await waitFlipperDone(() => stopFlag);
         else await wait(part.length * msPerLetter() + 30);
       }
@@ -1513,13 +1535,13 @@ async function runStep(s) {
 let playingName = null;
 async function playMacro(name, reps = 1, mark = false) {
   if (playing) { stopPlay(); return; }
-  if (!connected) { showErr("Connect to the board first."); return; }
+  if (!connected) { showErr("Connect to the Flipper first."); return; }
   if (recording) stopRec();
   const list = macros[name];
   if (!list || !list.length) { showErr(`"${name}" has no steps yet.`); return; }
   if (flipperRunning || bulkRunning) { showErr("A text is still being typed: wait, or tap Stop first."); return; }
   showErr(""); clearMods(); playing = true; playingName = name; stopFlag = false; showBar(); renderRemote();
-  delayDirty = true; pump();   // the board: Caps Lock now pauses, it doesn't start a text
+  delayDirty = true; pump();   // the Flipper: Caps Lock now pauses, it doesn't start a text
   try {
     for (let r = 0; r < reps && !stopFlag; r++) {
       for (let i = 0; i < list.length && !stopFlag && connected; i++) {
@@ -1909,17 +1931,81 @@ window.addEventListener("pagehide", () => { if (connected) device.gatt.disconnec
 // ---------------- write with Claude ----------------
 // Photos of a task (camera or gallery) + the saved reference images + the saved
 // instruction go to Claude; its answer lands in the Send text box, which is stored
-// on the board as usual: Caps Lock on the PC types it, pauses and resumes.
+// on the Flipper as usual: Caps Lock on the PC types it, pauses and resumes.
 // The API key and references stay on this phone (localStorage / IndexedDB).
 const CLAUDE_MODEL = "claude-opus-5-5";
 const SDK_URL = "https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.7.0/+esm";
 const DEFAULT_INSTR = "okay dieser chat wird dafür da sein um english texte generieren zu lassen. ich habe dir alle references für context hochgeladen damit du weißt. der ablauf wird so sein, ich werde dir ein bild von einer aufgabe schicken oder direkt auch 2 oder 3 bilder wo man 2 oder einen text schreiben muss und du wirst mir als antwort einfach nur den text oder die texte nacheinander geben ohne irgendwas anderes also wirklich nur die texte";
+// Added to every request: the answer is typed as is, so no Markdown and no blanks to fill in
+const FORMAT_RULE = "Output format: plain text only, exactly as it will be typed into a normal text field. " +
+  "No Markdown or other formatting: no ** or * for bold or italics, no # headings, no --- lines, no > quotes, " +
+  "no [text](url) links (write a web address as plain text, e.g. www.example.com). " +
+  "Put each heading or subheading on its own line as plain words. Simple '- ' list items are fine where the text type needs a list. " +
+  "If you write more than one text, separate them with two empty lines. " +
+  "Never leave placeholders such as 20__, __, [Name] or XX: fill in suitable details yourself. " +
+  "If a date is needed and the task doesn't give one, use today's date, which is given in the message. " +
+  "End with the last sentence of the text itself: no word count (e.g. 'Wortanzahl: 640'), no notes or comments before or after it.";
+// Which text to work with: only the one given in the task (an excerpt stays an excerpt)
+const SOURCE_RULE = "Source text: work only with the text given in the task (on the photos or typed in). " +
+  "Passages left out there with (…), […], (...) or [...] are not part of the text: do not summarise, quote or mention them, " +
+  "even if you know the full original, find it online or see it in a reference. " +
+  "The references are only models for structure, style and phrasing: never take content or quotations from a reference " +
+  "unless they also appear in the given text. Quote word for word exactly as printed in the given text (keep its spelling). " +
+  "Cite every quotation and every reference to the text with line numbers in the form (Z. 12) or, across two lines, (Z. 12 f.); " +
+  "never refer to paragraphs (Abs.). Use the line numbers printed on the given text. If it has none (typed text, or a text found online), " +
+  "number the lines yourself as the text would be printed on a normal A4 worksheet, about 10 to 12 words per line, counting from its first line. " +
+  "Web search: use it only if the task names a text without giving the text itself, or if the task explicitly asks you to search. " +
+  "Then look for exactly the version named (author, date, source, translation) and work with that. " +
+  "Never mention the search, sources or links in your answer.";
+// A word count line at the end ("Wortanzahl: 640", "(ca. 640 Wörter)", "Word count: 250")
+const WORDCOUNT_END = /(\n[ \t]*\(?[ \t]*(?:(?:wortanzahl|wortzahl|anzahl der wörter|wörter|word count|words)[ \t]*[:：]?[ \t]*(?:ca\.?|circa|etwa|~)?[ \t]*\d{2,5}(?:[ \t]*(?:wörter|words))?|(?:ca\.?|circa|etwa|~)?[ \t]*\d{2,5}[ \t]*(?:wörter|words))[ \t]*\)?[ \t]*\.?[ \t]*)+\s*$/i;
+// Remove Markdown that still comes back (Claude's answer is typed character by character)
+function plainText(s) {
+  const year = String(new Date().getFullYear());
+  return s.replace(/\r\n?/g, "\n")
+    .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (m, t, u) => (/^\S+\.\S+$/.test(t) || t === u ? t : `${t} (${u.replace(/^https?:\/\//, "")})`))
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "")                     // # headings
+    .replace(/^[ \t]{0,3}>[ \t]?/gm, "")                          // > quotes
+    .replace(/^[ \t]*([-*_])([ \t]*\1){2,}[ \t]*$/gm, "")            // --- / *** lines
+    .replace(/^([ \t]*)[*+][ \t]+/gm, "$1- ")                     // * list items -> - list items
+    .replace(/\*\*(\S(?:[^*\n]*?\S)?)\*\*/g, "$1")          // **bold**
+    .replace(/(^|[^\w*])\*(\S(?:[^*\n]*?\S)?)\*(?![\w*])/gm, "$1$2")   // *italics*
+    .replace(/`([^`\n]+)`/g, "$1")                          // `code`
+    .replace(/\*\*/g, "")                                   // stray **
+    .replace(/\b20__\b/g, year)                             // a year left blank
+    .replace(WORDCOUNT_END, "")                              // "Wortanzahl: 640" at the end
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+}
+function todayText() { return new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); }
+const WEB_MAX_WORDS = 200;   // a task this short (and no photos) may name a text instead of giving it
 const TASK_EDGE = 2576, REF_EDGE = 1568;   // long edge in px: tasks full detail, references cheaper
 // Claude Opus 5.5, $ per million tokens: input, cache write (5 min), cache read, output
 const PRICE = { in: 4, write: 5, read: 0.2, out: 20 };
 let Anthropic = null, claudeTasks = [], claudeRefs = [], claudeBusy = null;
 
-function cMsg(text, kind = "") { const el = $("cMsg"); el.textContent = text || ""; el.className = "cmsg " + kind; }
+function cMsg(text, kind = "") {
+  const el = $("cMsg"); el.textContent = text || ""; el.className = "cmsg " + kind;
+  $("cLockMsg").textContent = text || "";   // (shown on the lock screen too)
+}
+// Lock screen while Claude writes: covers the whole page, so a stray tap does nothing.
+// It opens with Write text and closes by itself when the text is there (or on an error).
+// Cancelling needs the button held for 1.5 s.
+function lockScreen(on) { $("cLock").classList.toggle("open", on); if (!on) $("cLockHold").classList.remove("holding"); }
+(function () {
+  const lock = $("cLock"), hold = $("cLockHold");
+  let timer = null;
+  const stop = () => { clearTimeout(timer); timer = null; hold.classList.remove("holding"); };
+  hold.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); stop(); void hold.offsetWidth; hold.classList.add("holding");
+    timer = setTimeout(() => { stop(); if (claudeBusy) { claudeBusy.cancelled = true; if (claudeBusy.abort) claudeBusy.abort(); } }, 1500);
+  });
+  ["pointerup", "pointerleave", "pointercancel"].forEach((t) => hold.addEventListener(t, stop));
+  // swallow everything else: no scrolling, zooming or taps through the lock
+  ["touchstart", "touchmove", "touchend", "wheel"].forEach((t) => lock.addEventListener(t, (e) => { if (e.target !== hold && e.cancelable) e.preventDefault(); }, { passive: false }));
+  lock.addEventListener("contextmenu", (e) => e.preventDefault());
+})();
 function lsGet(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
@@ -1940,9 +2026,15 @@ async function shrinkImage(file, maxEdge) {
 function renderThumbs(el, list, onRemove) {
   el.innerHTML = "";
   list.forEach((it, i) => {
-    const d = document.createElement("div"), im = document.createElement("img"), x = document.createElement("button");
-    im.src = it.url; x.textContent = "×"; x.onclick = () => onRemove(i);
-    d.append(im, x); el.appendChild(d);
+    const d = document.createElement("div"), x = document.createElement("button");
+    if (it.url) { const im = document.createElement("img"); im.src = it.url; d.appendChild(im); }
+    else {   // a document: its type and name
+      d.className = "file"; d.title = it.name || "";
+      const b = document.createElement("b"); b.textContent = it.kind === "pdf" ? "PDF" : "TEXT";
+      d.append(b, document.createTextNode((it.name || "").slice(0, 24)));
+    }
+    x.textContent = "×"; x.onclick = () => onRemove(i);
+    d.appendChild(x); el.appendChild(d);
   });
 }
 
@@ -1963,7 +2055,141 @@ $("cCam").onclick = () => $("cCamIn").click();
 $("cLib").onclick = () => $("cLibIn").click();
 $("cCamIn").onchange = async (e) => { await addTasks([...e.target.files]); e.target.value = ""; };
 $("cLibIn").onchange = async (e) => { await addTasks([...e.target.files]); e.target.value = ""; };
-$("cClear").onclick = () => { claudeTasks = []; renderTasks(); cMsg(""); };
+$("cClear").onclick = () => { claudeTasks = []; $("cTaskText").value = ""; renderTasks(); cMsg(""); };
+
+// ---- reading reference files of any kind
+// Images -> JPEG, PDF -> as is (Claude reads text and pictures), Word / PowerPoint /
+// Excel / OpenDocument / EPUB -> their text, text-like files (txt, md, csv, html, rtf…) -> text.
+const PDF_MAX = 30 * 1024 * 1024, TEXT_MAX = 2 * 1024 * 1024;
+function fileExt(name) { const m = /\.([a-z0-9]+)$/i.exec(name || ""); return m ? m[1].toLowerCase() : ""; }
+function bytesToB64(u8) { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+function xmlEntities(s) {
+  return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (m, d) => String.fromCodePoint(+d)).replace(/&#x([0-9a-f]+);/gi, (m, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&amp;/g, "&");
+}
+// Minimal ZIP reader (docx, pptx, xlsx, odt, epub are ZIP files)
+async function unzip(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf), files = {};
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("not a ZIP-based file");
+  let p = dv.getUint32(eocd + 16, true);
+  const count = dv.getUint16(eocd + 10, true), dec = new TextDecoder();
+  for (let k = 0; k < count && dv.getUint32(p, true) === 0x02014b50; k++) {
+    const method = dv.getUint16(p + 10, true), size = dv.getUint32(p + 20, true);
+    const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    const name = dec.decode(u8.subarray(p + 46, p + 46 + nl));
+    files[name] = async () => {
+      const start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true), data = u8.subarray(start, start + size);
+      if (method === 0) return dec.decode(data);
+      if (method !== 8) throw new Error("unsupported compression");
+      const out = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      return dec.decode(await new Response(out).arrayBuffer());
+    };
+    p += 46 + nl + xl + cl;
+  }
+  return files;
+}
+const byNumber = (a, b) => (+(/(\d+)\D*$/.exec(a) || [0, 0])[1]) - (+(/(\d+)\D*$/.exec(b) || [0, 0])[1]);
+function xmlText(xml, paraEnd) {   // paragraphs -> lines, tags removed
+  return xmlEntities(xml.replace(paraEnd, "\n").replace(/<(w:tab|text:tab)\/>/g, "\t").replace(/<(w:br|a:br|text:line-break)\b[^>]*\/>/g, "\n").replace(/<[^>]+>/g, ""));
+}
+async function officeText(buf, ext) {
+  const z0 = await unzip(buf), names = Object.keys(z0);
+  const z = new Proxy(z0, { get: (t, n) => t[n] || (() => { throw new Error("the file looks damaged (" + String(n) + " missing)"); }) });
+  if (ext === "docx" || ext === "docm" || ext === "dotx") return xmlText(await z["word/document.xml"](), /<\/w:p>/g);
+  if (ext === "pptx" || ext === "ppsx") {
+    const slides = names.filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort(byNumber), out = [];
+    for (let i = 0; i < slides.length; i++) out.push(`[Slide ${i + 1}]\n` + xmlText(await z[slides[i]](), /<\/a:p>/g).trim());
+    return out.join("\n\n");
+  }
+  if (ext === "xlsx" || ext === "xlsm") {
+    const shared = z0["xl/sharedStrings.xml"] ? [...(await z["xl/sharedStrings.xml"]()).matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) => xmlText(m[1], /$^/g)) : [];
+    const sheets = names.filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort(byNumber), out = [];
+    for (let i = 0; i < sheets.length; i++) {
+      const rows = [...(await z[sheets[i]]()).matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)].map((r) =>
+        [...r[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)].map((c) => {
+          const t = /\bt="(\w+)"/.exec(c[1]), v = /<v>([\s\S]*?)<\/v>/.exec(c[2] || ""), is = /<is>([\s\S]*?)<\/is>/.exec(c[2] || "");
+          if (t && t[1] === "s" && v) return shared[+v[1]] || "";
+          if (is) return xmlText(is[1], /$^/g);
+          return v ? xmlEntities(v[1]) : "";
+        }).join("\t"));
+      out.push(`[Sheet ${i + 1}]\n` + rows.join("\n"));
+    }
+    return out.join("\n\n");
+  }
+  if (["odt", "odp", "ods", "ott"].includes(ext)) return xmlText(await z["content.xml"](), /<\/text:(p|h)>/g);
+  if (ext === "epub") {
+    const parts = names.filter((n) => /\.x?html?$/i.test(n)).sort(), out = [];
+    for (const n of parts) out.push(htmlText(await z[n]()));
+    return out.join("\n\n");
+  }
+  throw new Error("unknown Office type");
+}
+function htmlText(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("script,style").forEach((e) => e.remove());
+  doc.querySelectorAll("br").forEach((e) => e.replaceWith("\n"));
+  doc.querySelectorAll("p,div,li,h1,h2,h3,h4,h5,h6,tr").forEach((e) => e.append("\n"));
+  return (doc.body ? doc.body.textContent : "").replace(/\n{3,}/g, "\n\n");
+}
+function rtfText(rtf) {   // small RTF reader: text, paragraphs, special and Unicode characters
+  const SKIP = /^(fonttbl|colortbl|stylesheet|info|pict|object|header|footer|headerl|headerr|footerl|footerr|expandedcolortbl|listtable|listoverridetable|rsidtbl|generator|themedata|colorschememapping|datastore|latentstyles|xmlnstbl|mmathPr)$/;
+  const SPECIAL = { emdash: "—", endash: "–", lquote: "‘", rquote: "’", ldblquote: "“", rdblquote: "”", bullet: "•", par: "\n", line: "\n", sect: "\n", page: "\n", tab: "\t" };
+  const cp1252 = new TextDecoder("windows-1252");
+  let out = "", i = 0, uc = 1, pending = 0;
+  const skip = [false], skipping = () => skip[skip.length - 1];
+  const put = (t) => { if (skipping()) return; if (pending > 0) { pending--; return; } out += t; };
+  while (i < rtf.length) {
+    const c = rtf[i];
+    if (c === "{") { skip.push(skipping()); i++; continue; }
+    if (c === "}") { if (skip.length > 1) skip.pop(); i++; continue; }
+    if (c === "\r" || c === "\n") { i++; continue; }
+    if (c !== "\\") { put(c); i++; continue; }
+    const n = rtf[i + 1];
+    if (n === "\\" || n === "{" || n === "}") { put(n); i += 2; continue; }
+    if (n === "\n" || n === "\r") { if (!skipping()) out += "\n"; i += 2; continue; }
+    if (n === "*") { skip[skip.length - 1] = true; i += 2; continue; }
+    if (n === "~") { put(" "); i += 2; continue; }
+    if (n === "'") { put(cp1252.decode(new Uint8Array([parseInt(rtf.substr(i + 2, 2), 16) || 32]))); i += 4; continue; }
+    const m = /^\\([a-zA-Z]+)(-?\d+)? ?/.exec(rtf.slice(i, i + 48));
+    if (!m) { i += 2; continue; }
+    i += m[0].length;
+    const w = m[1];
+    if (SKIP.test(w)) { skip[skip.length - 1] = true; continue; }
+    if (skipping()) continue;
+    if (w === "uc") uc = +m[2] || 0;
+    else if (w === "u") { let cp = +m[2]; if (cp < 0) cp += 65536; out += String.fromCharCode(cp); pending = uc; }
+    else if (SPECIAL[w]) { pending = 0; out += SPECIAL[w]; }
+  }
+  return out;
+}
+const IMAGE_EXT = ["jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "tif", "tiff", "avif"];
+const OFFICE_EXT = ["docx", "docm", "dotx", "pptx", "ppsx", "xlsx", "xlsm", "odt", "odp", "ods", "ott", "epub"];
+async function readReference(f) {
+  const ext = fileExt(f.name), type = f.type || "", name = f.name || "file";
+  if (type.startsWith("image/") || IMAGE_EXT.includes(ext)) {
+    const { b64 } = await shrinkImage(f, REF_EDGE);
+    return { kind: "image", name, b64 };
+  }
+  if (type === "application/pdf" || ext === "pdf") {
+    if (f.size > PDF_MAX) throw new Error("PDF too big (max 30 MB)");
+    return { kind: "pdf", name, b64: bytesToB64(new Uint8Array(await f.arrayBuffer())) };
+  }
+  let text;
+  if (OFFICE_EXT.includes(ext)) text = await officeText(await f.arrayBuffer(), ext);
+  else if (["doc", "ppt", "xls", "pages", "key", "numbers"].includes(ext)) throw new Error("this format can't be read here: save it as PDF or .docx and add that");
+  else {
+    if (f.size > TEXT_MAX) throw new Error("file too big (max 2 MB of text)");
+    const raw = await f.text();
+    if (/[\u0000-\u0008\u000E-\u001A]/.test(raw.slice(0, 4000)) || (raw.match(/�/g) || []).length > 20)
+      throw new Error("not a readable document (try PDF, Word, text or an image)");
+    text = ext === "html" || ext === "htm" || type === "text/html" ? htmlText(raw) : ext === "rtf" ? rtfText(raw) : raw;
+  }
+  text = text.replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/\n{4,}/g, "\n\n\n").trim();
+  if (!text) throw new Error("no text found in it");
+  return { kind: "text", name, text };
+}
 
 // ---- references (IndexedDB, on this phone)
 function refDb() {
@@ -1982,11 +2208,15 @@ async function refTx(mode, fn) {
 }
 async function loadRefs() {
   try { claudeRefs = (await refTx("readonly", (st) => st.getAll())) || []; } catch (e) { claudeRefs = []; }
-  claudeRefs.forEach((r) => { r.url = "data:image/jpeg;base64," + r.b64; });
+  claudeRefs.forEach((r) => { if (!r.kind) r.kind = "image"; if (r.kind === "image") r.url = "data:image/jpeg;base64," + r.b64; });
   renderRefs();
 }
 function renderRefs() {
-  $("cRefCount").textContent = claudeRefs.length ? claudeRefs.length + (claudeRefs.length === 1 ? " image" : " images") : "none";
+  const n = (k) => claudeRefs.filter((r) => r.kind === k).length, parts = [];
+  if (n("image")) parts.push(n("image") + (n("image") === 1 ? " image" : " images"));
+  if (n("pdf")) parts.push(n("pdf") + " PDF");
+  if (n("text")) parts.push(n("text") + (n("text") === 1 ? " document" : " documents"));
+  $("cRefCount").textContent = parts.length ? parts.join(", ") : "none";
   renderThumbs($("cRefs"), claudeRefs, async (i) => {
     try { await refTx("readwrite", (st) => st.delete(claudeRefs[i].id)); } catch (e) {}
     await loadRefs();
@@ -1996,14 +2226,15 @@ $("cRefAdd").onclick = () => $("cRefIn").click();
 $("cRefIn").onchange = async (e) => {
   const files = [...e.target.files]; e.target.value = "";
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (_) {}
-  let n = 0;
+  let n = 0; const failed = [];
   for (const f of files) {
     cMsg(`Saving references… ${++n}/${files.length}`);
-    try { const { b64 } = await shrinkImage(f, REF_EDGE); await refTx("readwrite", (st) => st.add({ name: f.name || "", b64 })); }
-    catch (err) { cMsg("Couldn't save a reference: " + err.message, "bad"); }
+    try { const rec = await readReference(f); await refTx("readwrite", (st) => st.add(rec)); }
+    catch (err) { failed.push((f.name || "a file") + ": " + err.message); }
   }
   await loadRefs();
-  cMsg(`${claudeRefs.length} references saved on this phone.`, "good");
+  if (failed.length) cMsg("Not added: " + failed.join("; "), "bad");
+  else cMsg(`${claudeRefs.length} references saved on this phone.`, "good");
 };
 $("cRefClear").onclick = async () => {
   if (!claudeRefs.length || !confirm(`Remove all ${claudeRefs.length} references from this phone?`)) return;
@@ -2021,11 +2252,11 @@ $("cRefClear").onclick = async () => {
   $("cEffort").addEventListener("change", () => lsSet("phonekb.claudeEffort", $("cEffort").value));
 })();
 
-// ---- the text box (same as Send text's box: edits are stored on the board again)
+// ---- the text box (same as Send text's box: edits are stored on the Flipper again)
 $("cOut").addEventListener("input", () => { $("bulk").value = $("cOut").value; $("bulk").dispatchEvent(new Event("input")); });
 function setBoxText(text) {
   $("bulk").value = text; $("cOut").value = text;
-  $("bulk").dispatchEvent(new Event("input"));   // a new text: store it on the board (Caps Lock types it)
+  $("bulk").dispatchEvent(new Event("input"));   // a new text: store it on the Flipper (Caps Lock types it)
   scheduleStore(50);
 }
 
@@ -2034,9 +2265,11 @@ async function writeWithClaude() {
   if (claudeBusy) return;
   const key = $("cKey").value.trim();
   if (!key) { $("cSet").open = true; cMsg("Enter your Anthropic API key in Claude settings first.", "bad"); return; }
-  if (!claudeTasks.length) { cMsg("Take or pick at least one photo of the task first.", "bad"); return; }
+  const taskText = $("cTaskText").value.trim();
+  if (!claudeTasks.length && !taskText) { cMsg("Add the task first: take or pick a photo, or type it in the box.", "bad"); return; }
   lsSet("phonekb.claudeKey", key);
   const ctl = { abort: null, cancelled: false }; claudeBusy = ctl; renderTasks();
+  lockScreen(true);
   cMsg("Loading…");
   try {
     if (!Anthropic) Anthropic = (await import(SDK_URL)).default;
@@ -2045,38 +2278,67 @@ async function writeWithClaude() {
     const content = [];
     if (claudeRefs.length) {
       content.push({ type: "text", text: "References (Kontext):" });
-      claudeRefs.forEach((r) => content.push(img(r.b64)));
+      claudeRefs.forEach((r) => content.push(
+        r.kind === "pdf" ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: r.b64 }, title: r.name || "PDF" } :
+        r.kind === "text" ? { type: "document", source: { type: "text", media_type: "text/plain", data: r.text }, title: r.name || "Text" } :
+        img(r.b64)));
       content[content.length - 1].cache_control = { type: "ephemeral" };   // same every time: cached, ~1/20 of the price
     }
-    content.push({ type: "text", text: claudeTasks.length === 1 ? "Aufgabe:" : `Aufgabe (${claudeTasks.length} Bilder):` });
+    const photos = claudeTasks.length === 0 ? "" : claudeTasks.length === 1 ? " (Bild)" : ` (${claudeTasks.length} Bilder)`;
+    content.push({ type: "text", text: `Today's date: ${todayText()}.\nAufgabe${photos}:` });
     claudeTasks.forEach((t) => content.push(img(t.b64)));
-    const stream = client.beta.messages.stream({
+    if (taskText) content.push({ type: "text", text: (claudeTasks.length ? "Aufgabe (Text, zusätzlich zu den Bildern):\n" : "") + taskText });
+    const params = {
       model: CLAUDE_MODEL,
       max_tokens: 32000,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",   // if Opus declines, the API retries on a fallback model
       output_config: { effort: $("cEffort").value || "high" },
-      system: $("cInstr").value.trim() || DEFAULT_INSTR,
+      system: ($("cInstr").value.trim() || DEFAULT_INSTR) + "\n\n" + FORMAT_RULE + "\n\n" + SOURCE_RULE,
       messages: [{ role: "user", content }],
-    });
-    ctl.abort = () => stream.abort();
-    let written = "";
+    };
+    // Web search only for a short typed task without photos (it names a text instead of giving it).
+    // With photos or a pasted text Claude can't go online at all, so it can't pull in the full original.
+    if (!claudeTasks.length && taskText.split(/\s+/).length <= WEB_MAX_WORDS)
+      params.tools = [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }, { type: "web_fetch_20260209", name: "web_fetch", max_uses: 4 }];
+    const usage = { in: 0, write: 0, read: 0, out: 0, searches: 0 };
+    let all = [], msg = null, written = "";
     cMsg("Claude is thinking… keep this page open (about 20–60 s).");
-    stream.on("text", (d) => {
-      written += d;
-      const words = written.trim().split(/\s+/).length;
-      cMsg(`Claude is writing… ${words} words`); $("cOut").value = written;
-    });
-    const msg = await stream.finalMessage();
+    for (let round = 1; ; round++) {
+      const stream = client.beta.messages.stream(params);
+      ctl.abort = () => stream.abort();
+      if (ctl.cancelled) stream.abort();   // cancelled while loading
+      stream.on("streamEvent", (ev) => {
+        if (ev.type !== "content_block_start") return;
+        const t = ev.content_block && ev.content_block.type;
+        if (t === "server_tool_use") { written = ""; cMsg("Claude is searching online for the text…"); }
+        else if (t && /tool_result$/.test(t)) { written = ""; cMsg("Claude is reading what it found…"); }
+      });
+      stream.on("text", (d) => {
+        written += d;
+        cMsg(`Claude is writing… ${written.trim().split(/\s+/).length} words`); $("cOut").value = written;
+      });
+      msg = await stream.finalMessage();
+      const u = msg.usage || {};
+      usage.in += u.input_tokens || 0; usage.write += u.cache_creation_input_tokens || 0;
+      usage.read += u.cache_read_input_tokens || 0; usage.out += u.output_tokens || 0;
+      usage.searches += (u.server_tool_use && u.server_tool_use.web_search_requests) || 0;
+      all = all.concat(msg.content);
+      // A long search can pause the turn: send it back so Claude carries on
+      if (msg.stop_reason !== "pause_turn" || round >= 5) break;
+      params.messages = params.messages.concat([{ role: "assistant", content: msg.content }]);
+    }
     if (msg.stop_reason === "refusal") throw new Error("Claude declined this task" + (msg.stop_details && msg.stop_details.explanation ? ": " + msg.stop_details.explanation : "."));
-    const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
+    // The answer is the text after the last search (anything before it is Claude talking to itself)
+    let last = -1;
+    all.forEach((blk, i) => { if (blk.type === "server_tool_use" || /tool_result$/.test(blk.type)) last = i; });
+    const text = plainText(all.slice(last + 1).filter((blk) => blk.type === "text").map((blk) => blk.text).join(""));
     if (!text) throw new Error("Claude sent no text back. Try again.");
     setBoxText(text);
-    const u = msg.usage || {}, cost = ((u.input_tokens || 0) * PRICE.in + (u.cache_creation_input_tokens || 0) * PRICE.write +
-      (u.cache_read_input_tokens || 0) * PRICE.read + (u.output_tokens || 0) * PRICE.out) / 1e6;
+    const cost = (usage.in * PRICE.in + usage.write * PRICE.write + usage.read * PRICE.read + usage.out * PRICE.out) / 1e6 + usage.searches * 0.01;
     const words = text.split(/\s+/).length;
-    cMsg(`Done: ${words} words (≈ $${cost.toFixed(2)})` + (msg.stop_reason === "max_tokens" ? " — cut off at the length limit!" : "") +
-      (connected ? ". Press Caps Lock on the PC to type it." : ". Connect to the board to store it."), msg.stop_reason === "max_tokens" ? "bad" : "good");
+    cMsg(`Done: ${words} words (≈ $${cost.toFixed(2)}${usage.searches ? `, searched online ${usage.searches}×` : ""})` + (msg.stop_reason === "max_tokens" ? " — cut off at the length limit!" : "") +
+      (connected ? ". Press Caps Lock on the PC to type it." : ". Connect to the Flipper to store it."), msg.stop_reason === "max_tokens" ? "bad" : "good");
   } catch (e) {
     if (ctl.cancelled) { cMsg("Cancelled."); }
     else if (Anthropic && e instanceof Anthropic.AuthenticationError) cMsg("The API key was rejected. Check it in Claude settings.", "bad");
@@ -2088,6 +2350,7 @@ async function writeWithClaude() {
     else cMsg(String((e && e.message) || e), "bad");
   } finally {
     claudeBusy = null; renderTasks();
+    lockScreen(false);
   }
 }
 $("cGo").onclick = writeWithClaude;

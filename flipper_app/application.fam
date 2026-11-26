@@ -1,0 +1,13 @@
+App(
+    appid="phone_kb",
+    name="Phone Keyboard",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="phone_kb_app",
+    stack_size=4 * 1024,
+    requires=["gui", "bt"],
+    fap_category="USB",
+    fap_icon="phone_kb_10px.png",
+    fap_version="1.0",
+    fap_description="Type and move the mouse on a USB-connected PC from your phone over Bluetooth",
+    fap_author="CarlAntaya",
+)
